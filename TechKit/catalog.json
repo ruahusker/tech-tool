@@ -1084,6 +1084,226 @@
           "desc": "remove Adobe license-blocking /etc/hosts entries"
         }
       ]
+    },
+    {
+      "id": "win-repair-sccm",
+      "path": "windows/Repair-SCCMClient.ps1",
+      "platform": "windows",
+      "category": "repair",
+      "title": "Repair SCCM Client",
+      "summary": "Refresh/repair the SCCM (ConfigMgr) client: trigger policy + inventory actions, clear ccmcache, restart CcmExec; optional ccmrepair + WMI repository salvage.",
+      "use_when": [
+        "sccm deployment didn't show up",
+        "software center empty/stale",
+        "inventory not updating",
+        "configmgr client broken"
+      ],
+      "admin": true,
+      "destructive": true,
+      "dry_run_default": true,
+      "runtime_seconds": 180,
+      "args": [
+        {
+          "name": "-Force",
+          "required": false,
+          "desc": "actually apply; dry-run default"
+        },
+        {
+          "name": "-Repair",
+          "required": false,
+          "desc": "ccmrepair + reset client policy"
+        },
+        {
+          "name": "-RepairWMI",
+          "required": false,
+          "desc": "verify/salvage WMI repository"
+        }
+      ]
+    },
+    {
+      "id": "mac-reset-jamf",
+      "path": "macos/reset_jamf.sh",
+      "platform": "macos",
+      "category": "repair",
+      "title": "Reset Jamf Check-in",
+      "summary": "Force a Jamf check-in/inventory/policy refresh (jamf policy/recon/manage + flush stuck policy history). Gated --reenroll removes the framework (unmanages device).",
+      "use_when": [
+        "jamf policy didn't run",
+        "inventory stale in jamf",
+        "mac fell out of management",
+        "force jamf check-in"
+      ],
+      "admin": true,
+      "destructive": true,
+      "dry_run_default": true,
+      "runtime_seconds": 120,
+      "args": [
+        {
+          "name": "--force",
+          "required": false,
+          "desc": "actually apply (sudo); dry-run default"
+        },
+        {
+          "name": "--reenroll",
+          "required": false,
+          "desc": "NUCLEAR: remove framework to re-enroll"
+        }
+      ]
+    },
+    {
+      "id": "win-reset-onedrive",
+      "path": "windows/Reset-OneDrive.ps1",
+      "platform": "windows",
+      "category": "repair",
+      "title": "Reset OneDrive",
+      "summary": "Reset OneDrive (onedrive /reset) to fix stuck/failed sync, then relaunch. Files are not deleted; they re-sync.",
+      "use_when": [
+        "onedrive stuck syncing",
+        "onedrive won't sync",
+        "sync pending forever"
+      ],
+      "admin": false,
+      "destructive": true,
+      "dry_run_default": true,
+      "runtime_seconds": 60,
+      "args": [
+        {
+          "name": "-Force",
+          "required": false,
+          "desc": "actually apply; dry-run default"
+        }
+      ]
+    },
+    {
+      "id": "mac-reset-onedrive",
+      "path": "macos/reset_onedrive.sh",
+      "platform": "macos",
+      "category": "repair",
+      "title": "Reset OneDrive",
+      "summary": "Reset OneDrive on macOS to fix stuck/failed sync, then relaunch. Files are not deleted; they re-sync.",
+      "use_when": [
+        "onedrive stuck syncing on mac",
+        "onedrive won't sync"
+      ],
+      "admin": false,
+      "destructive": true,
+      "dry_run_default": true,
+      "runtime_seconds": 60,
+      "args": [
+        {
+          "name": "--force",
+          "required": false,
+          "desc": "actually apply; dry-run default"
+        }
+      ]
+    },
+    {
+      "id": "win-clear-teams",
+      "path": "windows/Clear-TeamsCache.ps1",
+      "platform": "windows",
+      "category": "repair",
+      "title": "Clear Teams Cache",
+      "summary": "Clear Microsoft Teams cache (classic + new Teams) to fix freezes, blank screens, stale presence, login loops. Nothing of yours is lost.",
+      "use_when": [
+        "teams won't load",
+        "teams blank white screen",
+        "teams stuck signing in",
+        "teams slow/frozen"
+      ],
+      "admin": false,
+      "destructive": true,
+      "dry_run_default": true,
+      "runtime_seconds": 30,
+      "args": [
+        {
+          "name": "-Force",
+          "required": false,
+          "desc": "actually apply; dry-run default"
+        }
+      ]
+    },
+    {
+      "id": "mac-clear-teams",
+      "path": "macos/clear_teams_cache.sh",
+      "platform": "macos",
+      "category": "repair",
+      "title": "Clear Teams Cache",
+      "summary": "Clear Microsoft Teams cache on macOS (classic + new Teams) to fix freezes, blank screens, login loops.",
+      "use_when": [
+        "teams won't load on mac",
+        "teams blank screen",
+        "teams stuck signing in"
+      ],
+      "admin": false,
+      "destructive": true,
+      "dry_run_default": true,
+      "runtime_seconds": 30,
+      "args": [
+        {
+          "name": "--force",
+          "required": false,
+          "desc": "actually apply; dry-run default"
+        }
+      ]
+    },
+    {
+      "id": "win-repair-network",
+      "path": "windows/Repair-Network.ps1",
+      "platform": "windows",
+      "category": "network",
+      "title": "Repair Network",
+      "summary": "One-click network repair: flush DNS, reset Winsock/IP stack, renew DHCP, clear ARP, restart adapter. Stack reset needs a reboot.",
+      "use_when": [
+        "no internet",
+        "can't connect after VPN",
+        "flaky/dropping connection",
+        "network broken"
+      ],
+      "admin": true,
+      "destructive": true,
+      "dry_run_default": true,
+      "runtime_seconds": 60,
+      "args": [
+        {
+          "name": "-Force",
+          "required": false,
+          "desc": "actually apply; dry-run default"
+        },
+        {
+          "name": "-SkipStackReset",
+          "required": false,
+          "desc": "no-reboot refresh (skip Winsock/IP reset)"
+        }
+      ]
+    },
+    {
+      "id": "mac-repair-network",
+      "path": "macos/repair_network.sh",
+      "platform": "macos",
+      "category": "network",
+      "title": "Repair Network",
+      "summary": "One-click network repair for macOS: flush DNS, renew DHCP, toggle Wi-Fi, clear ARP.",
+      "use_when": [
+        "no internet on mac",
+        "wifi connected but nothing loads",
+        "flaky connection"
+      ],
+      "admin": true,
+      "destructive": true,
+      "dry_run_default": true,
+      "runtime_seconds": 30,
+      "args": [
+        {
+          "name": "--force",
+          "required": false,
+          "desc": "actually apply (sudo); dry-run default"
+        },
+        {
+          "name": "--renew-only",
+          "required": false,
+          "desc": "skip the Wi-Fi power toggle"
+        }
+      ]
     }
   ]
 }
