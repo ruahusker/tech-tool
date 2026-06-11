@@ -946,6 +946,75 @@
         }
       ],
       "title": "Full Triage Snapshot"
+    },
+    {
+      "id": "mac-remove-office365",
+      "path": "macos/remove_office365.sh",
+      "platform": "macos",
+      "category": "repair",
+      "title": "Remove Microsoft 365 (Deep)",
+      "summary": "Deep uninstall of Microsoft 365/Office for macOS: quits apps, removes app bundles + ~/Library containers/prefs/caches, forgets pkg receipts, clears keychain identity + license so products re-authenticate. Preserves Outlook mail and never touches user docs.",
+      "use_when": [
+        "office uninstall left files behind on mac",
+        "reinstall office clean",
+        "office signed into wrong account",
+        "office won't activate"
+      ],
+      "admin": true,
+      "destructive": true,
+      "dry_run_default": true,
+      "runtime_seconds": 180,
+      "args": [
+        {
+          "name": "--force",
+          "required": false,
+          "desc": "actually apply (use sudo); otherwise dry-run"
+        },
+        {
+          "name": "--reset-activation-only",
+          "required": false,
+          "desc": "clear sign-in/license only, no uninstall"
+        },
+        {
+          "name": "--remove-outlook-data",
+          "required": false,
+          "desc": "also wipe local Outlook mail (re-syncs for M365)"
+        },
+        {
+          "name": "--remove-all",
+          "required": false,
+          "desc": "also remove OneDrive and Teams"
+        }
+      ]
+    },
+    {
+      "id": "mac-installed-software",
+      "path": "macos/installed_software.sh",
+      "platform": "macos",
+      "category": "sysinfo",
+      "title": "Installed Software",
+      "summary": "Inventory installed software: /Applications with versions, Homebrew formulae/casks, and Mac App Store apps. --sort-date finds what changed recently.",
+      "use_when": [
+        "what's installed",
+        "did something install right before the problem",
+        "license/app audit"
+      ],
+      "admin": false,
+      "destructive": false,
+      "runtime_seconds": 15,
+      "args": [
+        {
+          "name": "--sort-date",
+          "required": false,
+          "desc": "newest-first"
+        },
+        {
+          "name": "search-term",
+          "required": false,
+          "positional": true,
+          "desc": "filter by name"
+        }
+      ]
     }
   ]
 }
