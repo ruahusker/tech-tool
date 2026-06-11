@@ -31,8 +31,20 @@ runs on modest hardware (8–16 GB RAM, no GPU required).
 The large binaries that make the kit *work* are intentionally **not committed** (they exceed
 GitHub's limits and aren't source): the GGUF model weights, llama.cpp builds, the bundled Node.js
 runtime, Qwen Code, and codex binaries — plus runtime logs, collected evidence, and reports.
-See [`.gitignore`](.gitignore). To produce a working drive you re-supply those assets into the
-ignored folders (a build/setup script for that is a TODO).
+See [`.gitignore`](.gitignore).
+
+## Building a working drive from a clone
+
+After cloning onto a USB drive, run the bootstrap once to download every platform's binaries
+into the ignored folders:
+
+```bash
+bash setup.sh            # full kit (downloads ~3 GB: models, engines, runtimes)
+bash setup.sh --no-draft # skip the optional speculative-decoding draft model
+```
+
+It fetches assets for **both Windows and macOS** (build on either, run on either) and is safe to
+re-run — existing files are skipped, only missing/failed ones are retried.
 
 ## Running the app
 
