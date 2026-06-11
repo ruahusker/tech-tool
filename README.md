@@ -4,7 +4,7 @@ A USB-drive toolkit that gives a technician a local, offline AI assistant plus a
 library of diagnostic and repair scripts for **Windows and macOS** — no install, no internet,
 runs on modest hardware (8–16 GB RAM, no GPU required).
 
-> Themed in University of Nebraska–Lincoln Scarlet & Cream.
+> Scarlet & cream theme.
 
 ## What's in here
 
