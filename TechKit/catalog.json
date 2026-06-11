@@ -1015,6 +1015,75 @@
           "desc": "filter by name"
         }
       ]
+    },
+    {
+      "id": "win-remove-adobe-cc",
+      "path": "windows/Remove-AdobeCreativeCloud.ps1",
+      "platform": "windows",
+      "category": "repair",
+      "title": "Remove Adobe Creative Cloud (Deep)",
+      "summary": "Deep uninstall of Adobe Creative Cloud + apps: stops Adobe processes/services (Genuine, Core Sync, AGS/AGM), runs supported uninstallers, removes leftover folders/registry/tasks, clears licensing (SLStore/SLCache) + sign-in (OOBE) so it re-authenticates. Keeps free Acrobat Reader; never touches creative files.",
+      "use_when": [
+        "adobe uninstall left files/services behind",
+        "creative cloud won't reinstall",
+        "adobe genuine / core sync running after uninstall",
+        "reinstall creative cloud clean"
+      ],
+      "admin": true,
+      "destructive": true,
+      "dry_run_default": true,
+      "runtime_seconds": 300,
+      "args": [
+        {
+          "name": "-Force",
+          "required": false,
+          "desc": "actually apply; otherwise dry-run"
+        },
+        {
+          "name": "-RemoveAll",
+          "required": false,
+          "desc": "also remove free Acrobat Reader"
+        },
+        {
+          "name": "-CleanHosts",
+          "required": false,
+          "desc": "remove Adobe license-blocking hosts entries (backs up first)"
+        }
+      ]
+    },
+    {
+      "id": "mac-remove-adobe-cc",
+      "path": "macos/remove_adobe_cc.sh",
+      "platform": "macos",
+      "category": "repair",
+      "title": "Remove Adobe Creative Cloud (Deep)",
+      "summary": "Deep uninstall of Adobe Creative Cloud + apps for macOS: quits processes, removes app bundles + launch daemons/agents + ~/Library and /Library Adobe leftovers, forgets pkg receipts, clears licensing (SLStore/SLCache) + sign-in (OOBE) + keychain so it re-authenticates. Keeps Acrobat Reader; never touches creative files.",
+      "use_when": [
+        "adobe uninstall left files behind on mac",
+        "adobe genuine / core sync daemons after uninstall",
+        "reinstall creative cloud clean"
+      ],
+      "admin": true,
+      "destructive": true,
+      "dry_run_default": true,
+      "runtime_seconds": 240,
+      "args": [
+        {
+          "name": "--force",
+          "required": false,
+          "desc": "actually apply (use sudo); otherwise dry-run"
+        },
+        {
+          "name": "--remove-all",
+          "required": false,
+          "desc": "also remove Acrobat Reader"
+        },
+        {
+          "name": "--clean-hosts",
+          "required": false,
+          "desc": "remove Adobe license-blocking /etc/hosts entries"
+        }
+      ]
     }
   ]
 }
