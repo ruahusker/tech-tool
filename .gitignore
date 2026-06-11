@@ -1,0 +1,36 @@
+# ── Large binaries / downloaded assets (NEVER commit — multi-GB, exceed GitHub limits) ──
+# AI models
+**/*.gguf
+Qwen Coder Tech Agent/models/
+
+# Bundled runtimes & engine archives
+TechTool-UI/runtime/
+Qwen Coder Tech Agent/assets/llama.cpp/
+Qwen Coder Tech Agent/assets/codex/
+Qwen Coder Tech Agent/assets/qwen-code/
+*.tar.gz
+*.zip
+*.exe
+*.dll
+*.dylib
+
+# ── Runtime / generated output ──
+Qwen Coder Tech Agent/logs/
+Qwen Coder Tech Agent/configs/
+TechKit/collections/
+Reports/
+TechTool-UI/last-run*.log
+
+# Stray diagnostic outputs left on the drive during testing
+/sysinfo
+/system_info.txt
+
+# ── macOS / Windows / drive cruft ──
+._*
+.DS_Store
+.Spotlight-V100/
+.fseventsd/
+.Trashes/
+System Volume Information/
+Thumbs.db
+desktop.ini

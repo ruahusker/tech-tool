@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tech Tool</title>
+<style>
+  :root {
+    /* University of Nebraska–Lincoln: Scarlet & Cream */
+    --bg: #0c0a0b; --bg2: #131011; --panel: #1b1618; --panel2: #241d20; --line: #352a2d;
+    --line2: #463639; --text: #f7f1e6; --dim: #b0a597; --accent: #e6172e; --accent2: #c8102e;
+    --cream: #fdf8ee;
+    --grad: linear-gradient(135deg, #e6172e, #a40e22); --ok: #3fb950; --ok2:#2ea043;
+    --warn: #e3a008; --bad: #f85149; --bad2:#da3633;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --shadow: 0 8px 30px rgba(0,0,0,.5); --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, "Segoe UI", system-ui, sans-serif; color: var(--text); height: 100vh; overflow: hidden;
+    background: radial-gradient(1200px 600px at 15% -10%, #3a1418 0%, transparent 55%), radial-gradient(1000px 500px at 110% 0%, #2c1012 0%, transparent 50%), var(--bg);
+    -webkit-font-smoothing: antialiased; }
+  #app { display: flex; flex-direction: column; height: 100vh; }
+  header { display: flex; align-items: center; gap: 13px; padding: 14px 22px; background: rgba(20,15,16,.7); backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); }
+  header .logo { width: 34px; height: 34px; border-radius: 9px; background: var(--grad); display: flex; align-items: center; justify-content: center; font-size: 18px; box-shadow: 0 4px 14px rgba(230,23,46,.4); }
+  header h1 { font-size: 17px; margin: 0; font-weight: 700; letter-spacing: .2px; background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  header .machine { margin-left: auto; font-size: 11.5px; color: var(--dim); text-align: right; line-height: 1.5; }
+  .tabs { display: flex; gap: 6px; padding: 12px 22px; background: rgba(20,15,16,.45); }
+  .tab { padding: 9px 18px; border-radius: 999px; cursor: pointer; color: var(--dim); font-size: 13.5px; font-weight: 600; transition: all .15s; border: 1px solid transparent; }
+  .tab:hover { color: var(--text); background: rgba(255,255,255,.04); }
+  .tab.active { background: var(--grad); color: #fff; box-shadow: 0 4px 14px rgba(230,23,46,.35); }
+  main { flex: 1; overflow: hidden; display: flex; }
+  .view { flex: 1; overflow-y: auto; padding: 22px 26px; display: none; }
+  .view.active { display: block; animation: fade .25s ease; }
+  @keyframes fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+  /* setup overlay */
+  #setup { position: fixed; inset: 0; background: radial-gradient(900px 500px at 50% 30%, #341216 0%, var(--bg) 60%); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; z-index: 50; }
+  #setup.hidden { display: none; }
+  #setup .brand { width: 64px; height: 64px; border-radius: 16px; background: var(--grad); display: flex; align-items: center; justify-content: center; font-size: 34px; box-shadow: 0 10px 40px rgba(230,23,46,.5); }
+  .spinner { width: 40px; height: 40px; border: 3px solid rgba(255,255,255,.1); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #setupDetail { color: var(--dim); font-size: 14px; max-width: 440px; text-align: center; }
+  #setupErr { color: var(--bad); font-family: var(--mono); font-size: 13px; max-width: 620px; white-space: pre-wrap; display: none; background: rgba(248,81,73,.08); border: 1px solid rgba(248,81,73,.3); padding: 14px; border-radius: 10px; text-align: left; }
+
+  /* guided mode */
+  .cat-pills { display: flex; flex-wrap: wrap; gap: 9px; margin-bottom: 22px; }
+  .cat-pill { display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-radius: 11px; cursor: pointer; font-size: 13.5px; font-weight: 650; color: var(--dim); background: var(--panel); border: 1px solid var(--line); transition: all .15s; }
+  .cat-pill .pico { font-size: 16px; }
+  .cat-pill .pcount { font-size: 11px; font-weight: 700; color: var(--dim); background: rgba(255,255,255,.06); padding: 1px 7px; border-radius: 999px; }
+  .cat-pill:hover { color: var(--text); border-color: var(--line2); transform: translateY(-2px); }
+  .cat-pill.active { color: #fff; background: rgba(230,23,46,.16); border-color: var(--accent); box-shadow: 0 4px 16px rgba(230,23,46,.2); }
+  .cat-pill.active .pcount { background: rgba(230,23,46,.3); color: var(--cream); }
+  .cat-group { margin-bottom: 24px; }
+  .cat-group h2 { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.09em; color: var(--dim); margin: 0 0 12px; display: flex; align-items: center; gap: 8px; font-weight: 700; }
+  .cat-group h2 .cat-ico { font-size: 15px; }
+  #catPanel.roll { animation: rollDown .3s cubic-bezier(.2,.7,.3,1); }
+  @keyframes rollDown { from { opacity: 0; transform: translateY(-12px); } to { opacity: 1; transform: none; } }
+  .card { animation: cardIn .32s ease backwards; }
+  @keyframes cardIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 14px; }
+  .card { position: relative; background: linear-gradient(180deg, var(--panel) 0%, rgba(22,28,38,.7) 100%); border: 1px solid var(--line); border-radius: 13px; padding: 16px; cursor: pointer; transition: transform .12s ease, border-color .15s, box-shadow .15s; overflow: hidden; }
+  .card::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--grad); opacity: 0; transition: opacity .15s; }
+  .card:hover { transform: translateY(-3px); border-color: var(--line2); box-shadow: var(--shadow); }
+  .card:hover::before { opacity: 1; }
+  .card:active { transform: translateY(-1px); }
+  .card .top { display: flex; align-items: center; gap: 11px; margin-bottom: 9px; }
+  .card .ico { width: 38px; height: 38px; flex-shrink: 0; border-radius: 10px; background: rgba(230,23,46,.12); display: flex; align-items: center; justify-content: center; font-size: 19px; }
+  .card .name { font-weight: 650; font-size: 14.5px; line-height: 1.2; }
+  .card .desc { font-size: 12.5px; color: var(--dim); line-height: 1.5; }
+  .card .badges { margin-top: 10px; display: flex; gap: 6px; flex-wrap: wrap; }
+  .badge { font-size: 10px; padding: 3px 8px; border-radius: 999px; font-weight: 700; letter-spacing: .03em; }
+  .badge.danger { background: rgba(248,81,73,0.15); color: #ff7b72; }
+  .badge.admin { background: rgba(227,160,8,0.15); color: #e3a008; }
+
+  /* chat */
+  #chatView { display: none; flex-direction: column; height: 100%; padding: 0; }
+  #chatView.active { display: flex; }
+  #messages { flex: 1; overflow-y: auto; padding: 24px 26px; display: flex; flex-direction: column; gap: 14px; }
+  .msg { max-width: 760px; animation: fade .2s ease; }
+  .msg.user { align-self: flex-end; background: var(--grad); color: #fff; padding: 11px 15px; border-radius: 14px 14px 3px 14px; box-shadow: 0 4px 14px rgba(230,23,46,.25); }
+  .msg.ai { align-self: flex-start; background: var(--panel); border: 1px solid var(--line); padding: 12px 15px; border-radius: 14px 14px 14px 3px; line-height: 1.55; }
+  .msg.ai .flag { color: var(--warn); font-weight: 700; }
+  .tool-run { align-self: flex-start; max-width: 760px; width: 100%; background: var(--panel2); border: 1px solid var(--line); border-radius: 11px; overflow: hidden; }
+  .tool-run .head { padding: 10px 13px; font-size: 13px; display: flex; align-items: center; gap: 8px; cursor: pointer; }
+  .tool-run .head .ico { color: var(--accent); }
+  .tool-run pre { margin: 0; padding: 13px; background: #070a0f; font-family: var(--mono); font-size: 12px; max-height: 320px; overflow: auto; white-space: pre-wrap; border-top: 1px solid var(--line); display: none; }
+  .tool-run.open pre { display: block; }
+  #inputBar { padding: 16px 22px; border-top: 1px solid var(--line); background: rgba(20,15,16,.6); backdrop-filter: blur(8px); display: flex; gap: 11px; }
+  #chatInput { flex: 1; background: var(--bg2); border: 1px solid var(--line); color: var(--text); border-radius: 11px; padding: 12px 15px; font-size: 14px; resize: none; font-family: inherit; transition: border-color .15s, box-shadow .15s; }
+  #chatInput:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(230,23,46,.18); }
+  button.send { background: var(--grad); color: #fff; border: none; border-radius: 11px; padding: 0 22px; font-size: 14px; font-weight: 700; cursor: pointer; transition: opacity .15s, transform .05s; box-shadow: 0 4px 14px rgba(230,23,46,.3); }
+  button.send:hover { opacity: .92; } button.send:active { transform: translateY(1px); }
+  button.send:disabled { opacity: 0.45; cursor: default; box-shadow: none; }
+  .thinking { align-self: flex-start; color: var(--dim); font-size: 13px; display: flex; align-items: center; gap: 8px; }
+  .dot { width: 6px; height: 6px; background: var(--accent); border-radius: 50%; animation: pulse 1.2s infinite; }
+  .dot:nth-child(2){animation-delay:.2s} .dot:nth-child(3){animation-delay:.4s}
+  @keyframes pulse { 0%,100%{opacity:.25;transform:scale(.8)} 50%{opacity:1;transform:scale(1)} }
+  .hint { color: var(--dim); font-size: 13px; padding: 22px 26px 4px; line-height: 1.55; }
+
+  /* modal */
+  #modal { position: fixed; inset: 0; background: rgba(4,7,12,.66); backdrop-filter: blur(4px); display: none; align-items: center; justify-content: center; z-index: 60; }
+  #modal.show { display: flex; animation: fade .15s ease; }
+  .modal-box { background: var(--panel); border: 1px solid var(--line2); border-radius: var(--radius); width: 540px; max-width: 92vw; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column; box-shadow: var(--shadow); }
+  .modal-box .mhead { padding: 17px 22px; font-size: 16px; font-weight: 700; border-bottom: 1px solid var(--line); display:flex; align-items:center; gap:10px; flex-shrink: 0; }
+  .modal-box .mbody { padding: 20px 22px; font-size: 14px; line-height: 1.55; overflow-y: auto; flex: 1 1 auto; }
+  .modal-box .mbody .reason { color: #ffb84d; background: rgba(227,160,8,.1); border: 1px solid rgba(227,160,8,.3); padding: 11px 13px; border-radius: 9px; margin-bottom: 14px; }
+  .modal-box .mbody code { font-family: var(--mono); font-size: 13px; background: var(--bg2); padding: 9px 12px; border-radius: 8px; display: block; word-break: break-all; border: 1px solid var(--line); }
+  .modal-box .mfoot { flex-shrink: 0; padding: 15px 22px; display: flex; gap: 10px; justify-content: flex-end; border-top: 1px solid var(--line); background: rgba(0,0,0,.15); }
+  .btn { padding: 10px 18px; border-radius: 9px; font-size: 14px; font-weight: 650; cursor: pointer; border: 1px solid var(--line2); background: var(--panel2); color: var(--text); transition: all .12s; }
+  .btn:hover { border-color: var(--accent); background: rgba(230,23,46,.1); }
+  .btn:active { transform: translateY(1px); }
+  /* destructive: amber-edged danger so it stays distinct from the scarlet brand */
+  .btn.approve { background: var(--bad); border-color: var(--bad); color: #fff; }
+  .btn.approve:hover { background: var(--bad2); border-color: var(--bad2); }
+  /* primary "go" actions use the scarlet brand gradient */
+  .btn.approve.safe { background: var(--grad); border-color: transparent; color: #fff; box-shadow: 0 3px 12px rgba(230,23,46,.3); }
+  .btn.approve.safe:hover { filter: brightness(1.08); }
+  pre.out { margin: 0; background: #0a0708; padding: 13px; border-radius: 9px; font-family: var(--mono); font-size: 12px; max-height: 42vh; overflow: auto; white-space: pre-wrap; border: 1px solid var(--line); }
+
+  /* forms / inputs in modals */
+  .args-form label, .modal-box label { display: block; font-size: 13px; margin: 10px 0 4px; color: var(--dim); }
+  .modal-box input[type=text] { background: var(--bg2); border: 1px solid var(--line); color: var(--text); border-radius: 8px; padding: 9px 11px; font-size: 14px; }
+  .modal-box input[type=text]:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(230,23,46,.15); }
+  .argchk { display: flex; align-items: center; gap: 8px; margin: 6px 0; font-size: 14px; }
+  .meta-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+  .meta { font-size: 12px; font-weight: 650; padding: 5px 11px; border-radius: 999px; background: var(--panel2); border: 1px solid var(--line); color: var(--dim); }
+  .meta.time-meta { color: #ffd9c2; background: rgba(230,23,46,.1); border-color: rgba(230,23,46,.25); }
+  .meta.time-meta.slow { color: #ffd27a; background: rgba(227,160,8,.1); border-color: rgba(227,160,8,.3); }
+  .meta.admin-meta { color: #e3a008; background: rgba(227,160,8,.1); border-color: rgba(227,160,8,.3); }
+  .meta.danger-meta { color: #ff7b72; background: rgba(248,81,73,.1); border-color: rgba(248,81,73,.3); }
+  input[type=checkbox] { accent-color: var(--accent); width: 15px; height: 15px; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; } ::-webkit-scrollbar-thumb { background: var(--line2); border-radius: 6px; border: 2px solid transparent; background-clip: padding-box; } ::-webkit-scrollbar-thumb:hover { background: #44516a; }
+
+  /* AI analysis rendering */
+  .analysis { font-size: 13.5px; line-height: 1.55; }
+  .an-sec { background: var(--panel2); border: 1px solid var(--line); border-radius: 9px; padding: 12px 14px; margin-bottom: 10px; }
+  .an-head { font-size: 11px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; color: var(--dim); display: flex; align-items: center; gap: 7px; margin-bottom: 7px; }
+  .an-p { margin: 6px 0; }
+  .an-list { margin: 4px 0 2px; padding-left: 20px; }
+  .an-list li { margin: 5px 0; }
+  .an-body { white-space: normal; }
+  .analysis .er { color: #ff6b6b; font-weight: 700; background: rgba(248,81,73,.12); padding: 0 4px; border-radius: 4px; }
+  .analysis .wn { color: #ffc24d; font-weight: 700; }
+  .analysis .okk { color: #5fd97a; font-weight: 700; }
+  .analysis code { font-family: var(--mono); font-size: 12px; background: var(--bg2); padding: 1px 6px; border-radius: 5px; border: 1px solid var(--line); }
+  /* Next Steps is the hero section */
+  .an-sec.next-steps { background: linear-gradient(180deg, rgba(230,23,46,.1), rgba(230,23,46,.04)); border-color: rgba(230,23,46,.35); padding: 14px 16px; }
+  .an-sec.next-steps .an-head { color: #ff9aa6; font-size: 12px; }
+  .an-sec.next-steps .an-list { padding-left: 0; list-style: none; counter-reset: step; }
+  .an-sec.next-steps .an-list li { counter-increment: step; position: relative; padding: 7px 7px 7px 34px; margin: 7px 0; background: rgba(0,0,0,.18); border-radius: 8px; }
+  .an-sec.next-steps .an-list li::before { content: counter(step); position: absolute; left: 8px; top: 7px; width: 19px; height: 19px; border-radius: 50%; background: var(--grad); color: #fff; font-size: 11px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+  /* clickable tool shortcut inside analysis */
+  .toollink { display: inline-flex; align-items: center; gap: 3px; cursor: pointer; color: #fff; background: rgba(230,23,46,.9); padding: 1px 9px; border-radius: 999px; font-weight: 650; font-size: 12.5px; white-space: nowrap; transition: filter .12s, transform .05s; }
+  .toollink:hover { filter: brightness(1.12); }
+  .toollink:active { transform: translateY(1px); }
+  .toollink .tlgo { font-size: 10px; opacity: .85; }
+
+  /* toast */
+  #toast { position: fixed; bottom: 26px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--panel2); border: 1px solid var(--line2); color: var(--text); padding: 12px 18px; border-radius: 11px; box-shadow: var(--shadow); z-index: 70; font-size: 13.5px; opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; max-width: 80vw; }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  #toast .tok { color: var(--ok); font-weight: 700; margin-right: 7px; }
+</style>
+</head>
+<body>
+<div id="setup">
+  <div class="brand">🛠️</div>
+  <div class="spinner" id="spinner"></div>
+  <div style="font-size:19px;font-weight:700">Starting Tech Tool…</div>
+  <div id="setupDetail">Preparing the local AI engine</div>
+  <div id="setupErr"></div>
+</div>
+
+<div id="app">
+  <header>
+    <div class="logo">🛠️</div>
+    <h1>Tech Tool</h1>
+    <div class="machine" id="machineInfo"></div>
+  </header>
+  <div class="tabs">
+    <div class="tab active" data-view="guided">Guided</div>
+    <div class="tab" data-view="chat">Custom Query</div>
+  </div>
+  <main>
+    <div class="view active" id="guidedView"></div>
+    <div class="view" id="chatView">
+      <div class="hint">Describe the problem in plain words — e.g. "this computer is really slow" or "it can't get on the internet". The assistant will pick the right tool, run it, and explain what it finds. It asks before changing anything.</div>
+      <div id="messages"></div>
+      <div id="inputBar">
+        <textarea id="chatInput" rows="1" placeholder="Describe the problem…"></textarea>
+        <button class="send" id="sendBtn">Send</button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div id="toast"></div>
+<div id="modal"><div class="modal-box">
+  <div class="mhead" id="modalHead"></div>
+  <div class="mbody" id="modalBody"></div>
+  <div class="mfoot" id="modalFoot"></div>
+</div></div>
+
+<script>
+const SESSION = "s" + Math.random().toString(36).slice(2);
+let CATALOG = [];
+let busy = false;
+
+async function api(path, body) {
+  const opt = body
+    ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), cache: "no-store" }
+    : { cache: "no-store" };
+  // Cache-bust GETs so a stale response can never freeze the UI on a polling endpoint.
+  const url = body ? path : path + (path.includes("?") ? "&" : "?") + "_=" + Date.now();
+  const r = await fetch(url, opt);
+  return r.json();
+}
+
+// ---------- setup polling ----------
+let pollFails = 0;
+let pollCount = 0;
+async function pollSetup() {
+  pollCount++;
+  try {
+    const s = await api("/api/status");
+    pollFails = 0;
+    if (s.machine) document.getElementById("machineInfo").innerHTML =
+      `${s.machine.hostname}<br>${s.machine.platform} · ${s.machine.arch} · ${s.machine.ramGB} GB RAM`;
+    if (s.error) {
+      document.getElementById("spinner").style.display = "none";
+      document.getElementById("setupDetail").textContent = "Setup failed:";
+      const e = document.getElementById("setupErr"); e.style.display = "block"; e.textContent = s.error;
+      return;
+    }
+    if (s.ready) {
+      document.getElementById("setup").classList.add("hidden");
+      return;
+    }
+    // Show progress; if the engine is just starting (no detail yet), reassure after a while.
+    if (s.detail) document.getElementById("setupDetail").textContent = s.detail;
+    else if (pollCount > 12) document.getElementById("setupDetail").textContent =
+      "Starting the local AI engine… first launch can take a minute while the model loads.";
+  } catch (_) {
+    // Server not answering. Could be a moment during startup; warn if it persists.
+    pollFails++;
+    if (pollFails > 8) {
+      document.getElementById("spinner").style.display = "none";
+      document.getElementById("setupDetail").textContent = "Can't reach the Tech Tool service.";
+      const e = document.getElementById("setupErr"); e.style.display = "block";
+      e.textContent = "The local service isn't responding. Close this browser tab and the Tech Tool window, then double-click the launcher again. If it persists, another copy may already be running.";
+      return;
+    }
+  }
+  setTimeout(pollSetup, 800);
+}
+
+// ---------- guided mode ----------
+const CATEGORY_LABELS = {
+  triage: "Start here", sysinfo: "System information", performance: "Speed & performance",
+  network: "Network & internet", storage: "Disk space & health", logs: "Logs & crashes",
+  updates: "Updates", security: "Security", accounts: "User accounts",
+  printing: "Printing", hardware: "Hardware", repair: "Repair",
+};
+const CATEGORY_ICONS = {
+  triage: "🚑", sysinfo: "🖥️", performance: "⚡", network: "🌐", storage: "💾",
+  logs: "📋", updates: "🔄", security: "🔒", accounts: "👤", printing: "🖨️",
+  hardware: "🔋", repair: "🛠️",
+};
+// Broad top-level groups (each gathers several catalog categories) — keeps the pill row
+// short. Catalog categories stay fine-grained for the AI; this only affects the UI.
+const GROUPS = [
+  { key: "overview",    label: "Overview",         icon: "🚑", cats: ["triage", "sysinfo"] },
+  { key: "performance", label: "Performance",      icon: "⚡", cats: ["performance", "hardware"] },
+  { key: "network",     label: "Network",          icon: "🌐", cats: ["network", "printing"] },
+  { key: "storage",     label: "Storage",          icon: "💾", cats: ["storage"] },
+  { key: "logs",        label: "Logs & Repair",    icon: "📋", cats: ["logs", "repair"] },
+  { key: "security",    label: "Security & Users", icon: "🔒", cats: ["security", "accounts", "updates"] },
+];
+
+// Friendly tile name: catalog title if present, else derive from the filename.
+function scriptTitle(s) {
+  if (s.title) return s.title;
+  let n = s.path.split("/").pop().replace(/\.(ps1|sh)$/i, "").replace(/^Get-|^Invoke-/, "");
+  n = n.replace(/[-_]+/g, " ").replace(/([a-z])([A-Z])/g, "$1 $2");
+  return n.replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function fmtTime(sec) {
+  if (!sec || sec <= 0) return "a few seconds";
+  if (sec <= 10) return "a few seconds";
+  if (sec < 60) return "about " + (Math.round(sec / 5) * 5) + " seconds";
+  if (sec < 120) return "about a minute";
+  return "about " + Math.round(sec / 60) + " minutes";
+}
+function estChip(sec) {
+  const slow = sec && sec >= 60;
+  return `<span class="meta time-meta${slow ? " slow" : ""}">⏱ ${fmtTime(sec)}${slow ? " — be patient" : ""}</span>`;
+}
+
+function cardEl(s) {
+  const card = document.createElement("div");
+  card.className = "card";
+  const danger = s.destructive === true ? '<span class="badge danger">changes system</span>' : "";
+  const admin = s.admin === true ? '<span class="badge admin">needs admin</span>' : "";
+  const badges = (danger || admin) ? `<div class="badges">${danger}${admin}</div>` : "";
+  card.innerHTML = `
+    <div class="top">
+      <div class="ico">${CATEGORY_ICONS[s.category] || "🔧"}</div>
+      <div class="name">${escapeHtml(scriptTitle(s))}</div>
+    </div>
+    <div class="desc">${escapeHtml(s.summary)}</div>${badges}`;
+  card.onclick = () => (s.id.includes("find-large-files") ? openLargeFiles() : openScript(s));
+  return card;
+}
+
+let activeGroup = null;
+async function buildGuided() {
+  const data = await api("/api/catalog");
+  CATALOG = data.scripts;
+  const byCat = {};
+  CATALOG.forEach((s) => { (byCat[s.category] = byCat[s.category] || []).push(s); });
+
+  const view = document.getElementById("guidedView");
+  view.innerHTML = `<div class="cat-pills" id="catPills"></div><div id="catPanel"></div>`;
+  const pillRow = document.getElementById("catPills");
+
+  const liveGroups = GROUPS.filter((g) => g.cats.some((c) => byCat[c]));
+  liveGroups.forEach((g) => {
+    const count = g.cats.reduce((n, c) => n + (byCat[c] ? byCat[c].length : 0), 0);
+    const pill = document.createElement("div");
+    pill.className = "cat-pill";
+    pill.dataset.key = g.key;
+    pill.innerHTML = `<span class="pico">${g.icon}</span> ${g.label} <span class="pcount">${count}</span>`;
+    pill.onclick = () => showGroup(g.key, byCat);
+    pillRow.appendChild(pill);
+  });
+
+  showGroup((liveGroups[0] || {}).key, byCat);
+}
+
+function showGroup(key, byCat) {
+  if (!key) return;
+  activeGroup = key;
+  document.querySelectorAll(".cat-pill").forEach((p) => p.classList.toggle("active", p.dataset.key === key));
+  const g = GROUPS.find((x) => x.key === key);
+  const panel = document.getElementById("catPanel");
+  panel.innerHTML = "";
+  // Only show sub-headers when the group spans more than one populated category.
+  const liveCats = g.cats.filter((c) => byCat[c]);
+  const showHeads = liveCats.length > 1;
+  let delay = 0;
+  liveCats.forEach((cat) => {
+    const block = document.createElement("div");
+    block.className = "cat-group";
+    if (showHeads) block.innerHTML = `<h2><span class="cat-ico">${CATEGORY_ICONS[cat] || "•"}</span>${CATEGORY_LABELS[cat] || cat}</h2>`;
+    const cards = document.createElement("div");
+    cards.className = "cards";
+    byCat[cat].forEach((s) => {
+      const c = cardEl(s);
+      c.style.animationDelay = (delay += 30) + "ms";
+      cards.appendChild(c);
+    });
+    block.appendChild(cards);
+    panel.appendChild(block);
+  });
+  // retrigger the roll-down animation
+  panel.classList.remove("roll"); void panel.offsetWidth; panel.classList.add("roll");
+}
+
+function openScript(s) {
+  const optArgs = (s.args || []).filter((a) => !a.required);
+  let form = `<div style="color:var(--dim);margin-bottom:12px">${s.summary}</div>`;
+  form += `<div class="meta-row">${estChip(s.runtime_seconds)}${s.admin === true ? '<span class="meta admin-meta">🔑 needs admin</span>' : ""}${s.destructive === true ? '<span class="meta danger-meta">⚠ changes system</span>' : ""}</div>`;
+  if (s.use_when && s.use_when.length) form += `<div style="font-size:13px;margin-bottom:14px">Use when: ${s.use_when.join("; ")}.</div>`;
+  if (s.destructive === true) form += `<div class="reason">⚠ This can change the system. It runs in preview (dry-run) first; nothing changes until you choose to apply.</div>`;
+  if (optArgs.length) {
+    form += `<div class="args-form">`;
+    for (const a of optArgs) {
+      const isFlag = a.name.startsWith("-") && !a.desc?.includes("value") && a.default === undefined && !["-OutFile","-Search","-Target","-Port","-Path","-Destination","-OutDir","-DaysInactive","-Hours","-Top","-MinSizeMB","-Exclude","-SampleSeconds","-EventHours"].includes(a.name);
+      if (isFlag) {
+        form += `<div class="argchk"><input type="checkbox" id="arg_${a.name}" data-arg="${a.name}"><label for="arg_${a.name}" style="margin:0">${a.name} ${a.desc ? "— " + a.desc : ""}</label></div>`;
+      } else {
+        form += `<label>${a.name}${a.desc ? " — " + a.desc : ""}${a.default !== undefined ? " (default " + a.default + ")" : ""}</label><input type="text" data-arg="${a.name}" data-valued="1" style="width:100%" placeholder="${a.default !== undefined ? a.default : ""}">`;
+      }
+    }
+    form += `</div>`;
+  }
+  showModal(`${s.destructive ? "Preview" : "Run"}: ${scriptTitle(s)}`, form, [
+    { label: "Cancel", cls: "btn", action: closeModal },
+    { label: s.destructive ? "Preview" : "Run", cls: "btn approve safe", action: () => runGuided(s) },
+  ]);
+}
+
+function collectArgs() {
+  const args = [];
+  document.querySelectorAll("#modalBody [data-arg]").forEach((el) => {
+    if (el.type === "checkbox") { if (el.checked) args.push(el.dataset.arg); }
+    else if (el.value.trim()) { args.push(el.dataset.arg, el.value.trim()); }
+  });
+  return args;
+}
+
+async function runGuided(s) {
+  const args = collectArgs();
+  showModal(`Running ${scriptTitle(s)}…`, `<div style="display:flex;align-items:center;gap:12px"><div class="spinner" style="width:26px;height:26px;border-width:3px"></div><span style="color:var(--dim)">This may take up to ${s.runtime_seconds || 30}s…</span></div>`, []);
+  const res = await api("/api/run", { id: s.id, args });
+  const isForce = args.join(" ").toLowerCase().match(/-force|--force|-repair|-clearqueue|-delete|--delete|--trash/);
+  const footer = [{ label: "Close", cls: "btn", action: closeModal }];
+  // Offer to apply if this was a destructive dry-run
+  if (s.destructive === true && !isForce) {
+    footer.unshift({ label: "Apply changes", cls: "btn approve", action: () => applyGuided(s, args) });
+  }
+  showResult(`${scriptTitle(s)} — Result`, res.output || "(no output)", footer);
+}
+
+// Result modal with "Analyze with AI" + "Save to USB" buttons and an inline analysis area.
+let curReport = { title: "", output: "", analysis: "" };
+function showResult(title, output, footerButtons) {
+  const label = title.replace(/\s*—\s*Result$/, "").replace(/^Result:\s*/, "");
+  curReport = { title: label, output: output, analysis: "" };
+  const body = `
+    <pre class="out">${escapeHtml(output)}</pre>
+    <div id="analysisArea"></div>`;
+  const footer = [
+    { label: "🔍 Analyze with AI", cls: "btn approve safe", action: () => runAnalysis(label, output) },
+    { label: "💾 Save to USB", cls: "btn", action: saveReport },
+    ...(footerButtons || [{ label: "Close", cls: "btn", action: closeModal }]),
+  ];
+  showModalWide(title, body, footer);
+}
+
+async function runAnalysis(title, output) {
+  const area = document.getElementById("analysisArea");
+  if (!area) return;
+  area.innerHTML = `<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line);display:flex;align-items:center;gap:10px;color:var(--dim)"><div class="spinner" style="width:20px;height:20px;border-width:3px"></div> Analyzing with the local AI…</div>`;
+  let data;
+  try { data = await api("/api/analyze", { title, output }); }
+  catch (e) { area.innerHTML = `<div style="color:var(--bad);margin-top:12px">Analysis failed: ${escapeHtml(String(e))}</div>`; return; }
+  if (data.error) { area.innerHTML = `<div style="color:var(--bad);margin-top:12px">${escapeHtml(data.error)}</div>`; return; }
+  curReport.analysis = data.analysis;
+  area.innerHTML = `
+    <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">
+      <div style="font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--accent);margin-bottom:10px;font-weight:700">🔍 AI Analysis</div>
+      <div class="analysis">${renderAnalysis(data.analysis)}</div>
+    </div>`;
+  document.getElementById("analysisArea").scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+// Open one of our tools straight from an analysis link.
+function openToolById(id) {
+  const s = CATALOG.find((x) => x.id === id);
+  if (!s) return;
+  if (s.id.includes("find-large-files")) openLargeFiles(); else openScript(s);
+}
+function toolIdForName(name) {
+  // strip trailing flags/args the model may append, e.g. "Disk Health --verify"
+  const n = name.trim().toLowerCase().replace(/\s+[-–—].*$/, "").trim();
+  for (const s of CATALOG) if ((s.title || "").toLowerCase() === n) return s.id;
+  for (const s of CATALOG) {
+    const f = s.path.split("/").pop().toLowerCase();
+    if (f === n || f.replace(/\.(ps1|sh)$/, "") === n) return s.id;
+  }
+  // last resort: a known title appears at the start of the bolded text
+  for (const s of CATALOG) { const tl = (s.title || "").toLowerCase(); if (tl && n.startsWith(tl)) return s.id; }
+  return null;
+}
+// Inline formatting: tool links, error/warning/ok coloring, code, [!].
+function formatInline(text) {
+  let h = escapeHtml(text);
+  h = h.replace(/`([^`]+)`/g, '<code>$1</code>');
+  h = h.replace(/\*\*(.+?)\*\*/g, (m, inner) => {
+    const id = toolIdForName(inner);
+    if (id) return '<span class="toollink" onclick="openToolById(\'' + id + '\')">' + inner + ' <span class="tlgo">↗</span></span>';
+    return "<strong>" + inner + "</strong>";
+  });
+  h = h.replace(/\b(ERRORS?|FAIL(?:ED|URE)?|CRITICAL|CORRUPT(?:ED)?|BugCheck|blue screen|dirty shutdown|not running|offline|unreachable|denied)\b/gi, '<span class="er">$1</span>');
+  h = h.replace(/\b(WARNINGS?|WARN|LOW|AGING|STOPPED|PENDING|WEAK|HIGH|outdated|disabled)\b/gi, '<span class="wn">$1</span>');
+  h = h.replace(/\b(OK|HEALTHY|VERIFIED|PASSED|NORMAL|GOOD|no issues|up to date)\b/gi, '<span class="okk">$1</span>');
+  h = h.replace(/\[!\]/g, '<span class="er">[!]</span>');
+  return h;
+}
+const SECTION_META = {
+  "SUMMARY": { icon: "📋", cls: "" }, "FINDINGS": { icon: "🔎", cls: "" },
+  "LIKELY CAUSE": { icon: "🧭", cls: "" }, "NEXT STEPS": { icon: "💡", cls: "next-steps" },
+};
+function renderAnalysis(text) {
+  const lines = String(text).split("\n");
+  const secs = []; let cur = { head: null, lines: [] };
+  const hdr = /^\s*(?:\d+\.\s*)?(SUMMARY|FINDINGS|LIKELY CAUSE|NEXT STEPS)\b\s*[:\-–]?\s*(.*)$/i;
+  for (const line of lines) {
+    const m = line.match(hdr);
+    if (m) { if (cur.head || cur.lines.some((l) => l.trim())) secs.push(cur); cur = { head: m[1].toUpperCase(), lines: m[2].trim() ? [m[2]] : [] }; }
+    else cur.lines.push(line);
+  }
+  if (cur.head || cur.lines.some((l) => l.trim())) secs.push(cur);
+  if (!secs.length || (secs.length === 1 && !secs[0].head)) return `<div class="an-body">${formatInline(text).replace(/\n/g, "<br>")}</div>`;
+
+  return secs.map((sec) => {
+    const meta = sec.head ? (SECTION_META[sec.head] || { icon: "•", cls: "" }) : null;
+    // group body lines into list items vs paragraphs
+    let bodyHtml = ""; let listBuf = [];
+    const flush = () => { if (listBuf.length) { bodyHtml += `<ol class="an-list">${listBuf.map((li) => `<li>${li}</li>`).join("")}</ol>`; listBuf = []; } };
+    for (const raw of sec.lines) {
+      const t = raw.trim();
+      if (!t) continue;
+      const li = t.match(/^(?:\d+[.)]\s*|[-•*]\s*)(.*)$/);
+      if (li) listBuf.push(formatInline(li[1]));
+      else { flush(); bodyHtml += `<p class="an-p">${formatInline(t)}</p>`; }
+    }
+    flush();
+    const header = meta ? `<div class="an-head"><span>${meta.icon}</span>${sec.head}</div>` : "";
+    return `<div class="an-sec ${meta ? meta.cls : ""}">${header}${bodyHtml}</div>`;
+  }).join("");
+}
+
+async function saveReport() {
+  let data;
+  try { data = await api("/api/savereport", { title: curReport.title, output: curReport.output, analysis: curReport.analysis }); }
+  catch (e) { showToast("⚠ Save failed: " + String(e), 4000); return; }
+  if (data.error) { showToast("⚠ " + data.error, 4000); return; }
+  const name = (data.file || "").split(/[\\/]/).pop();
+  showToast(`<span class="tok">✓</span>Saved to USB: Reports/${escapeHtml(name)}${curReport.analysis ? " (with AI analysis)" : ""}`, 4500);
+}
+
+function applyGuided(s, dryArgs) {
+  // Determine the right force flag for this platform/script
+  const forceFlag = s.platform === "windows" ? "-Force" : "--force";
+  const applyArgs = dryArgs.concat([forceFlag]);
+  showModal("Apply changes?", `<div class="reason">⚠ This will now actually change the system.</div><div>Command:</div><code>${s.path.split("/").pop()} ${escapeHtml(applyArgs.join(" "))}</code><div style="margin-top:10px;color:var(--dim);font-size:13px">Administrator accounts are never removed, even if matched.</div>`, [
+    { label: "Cancel", cls: "btn", action: () => runGuided(s) },
+    { label: "Yes, apply", cls: "btn approve", action: async () => {
+      showModal("Applying…", `<div class="spinner" style="width:26px;height:26px;border-width:3px"></div>`, []);
+      const res = await api("/api/run", { id: s.id, args: applyArgs });
+      showResult("Done", res.output || "(no output)", [{ label: "Close", cls: "btn", action: closeModal }]);
+    } },
+  ]);
+}
+
+// ---------- chat mode ----------
+function addMsg(cls, html) {
+  const m = document.createElement("div");
+  m.className = "msg " + cls;
+  m.innerHTML = html;
+  document.getElementById("messages").appendChild(m);
+  scrollChat();
+  return m;
+}
+function addToolRun(ev) {
+  const wrap = document.createElement("div");
+  wrap.className = "tool-run";
+  const codeTag = ev.code === 0 ? "✓" : "⚠";
+  wrap.innerHTML = `<div class="head"><span class="ico">▸</span> ${codeTag} Ran <b>${escapeHtml(ev.title)}</b> ${ev.detail ? escapeHtml(ev.detail) : ""} <span style="margin-left:auto;color:var(--dim)">click to expand</span></div><pre>${escapeHtml(ev.output || "(no output)")}</pre>`;
+  wrap.querySelector(".head").onclick = () => wrap.classList.toggle("open");
+  document.getElementById("messages").appendChild(wrap);
+  scrollChat();
+}
+function scrollChat() { const m = document.getElementById("messages"); m.scrollTop = m.scrollHeight; }
+function formatAi(text) {
+  return escapeHtml(text).replace(/\[!\]/g, '<span class="flag">[!]</span>').replace(/\n/g, "<br>")
+    .replace(/`([^`]+)`/g, "<code style='background:var(--bg);padding:1px 5px;border-radius:4px;font-family:var(--mono)'>$1</code>");
+}
+
+let thinkingEl = null;
+function showThinking() { thinkingEl = document.createElement("div"); thinkingEl.className = "thinking"; thinkingEl.innerHTML = `<span class="dot"></span><span class="dot"></span><span class="dot"></span> working…`; document.getElementById("messages").appendChild(thinkingEl); scrollChat(); }
+function hideThinking() { if (thinkingEl) { thinkingEl.remove(); thinkingEl = null; } }
+
+function renderEvents(events) { (events || []).forEach(addToolRun); }
+
+function handleAgentOut(out) {
+  hideThinking();
+  renderEvents(out.events);
+  if (out.type === "reply") {
+    addMsg("ai", formatAi(out.content));
+    setBusy(false);
+  } else if (out.type === "confirm") {
+    askApproval(out.call);
+  }
+}
+
+function askApproval(call) {
+  const isShell = call.name === "run_shell";
+  const cmdText = isShell ? call.args.command : `${call.title} ${(call.args.args || []).join(" ")}`;
+  showModal("Approve this action?",
+    `<div class="reason">⚠ ${escapeHtml(call.reason)}</div><div>The assistant wants to run:</div><code>${escapeHtml(cmdText)}</code><div style="margin-top:12px;color:var(--dim);font-size:13px">${isShell ? "This is a raw command." : "This script flag changes the system."} Administrator accounts are never removed.</div>`,
+    [
+      { label: "Deny", cls: "btn", action: () => { closeModal(); sendConfirm(false); } },
+      { label: "Approve & run", cls: "btn approve", action: () => { closeModal(); sendConfirm(true); } },
+    ]);
+}
+
+async function sendConfirm(approve) {
+  showThinking();
+  const out = await api("/api/confirm", { session: SESSION, approve });
+  handleAgentOut(out);
+}
+
+async function sendChat() {
+  const input = document.getElementById("chatInput");
+  const text = input.value.trim();
+  if (!text || busy) return;
+  input.value = ""; input.style.height = "auto";
+  addMsg("user", escapeHtml(text));
+  setBusy(true);
+  showThinking();
+  try {
+    const out = await api("/api/chat", { session: SESSION, message: text });
+    if (out.error) { hideThinking(); addMsg("ai", "⚠ " + escapeHtml(out.error)); setBusy(false); return; }
+    handleAgentOut(out);
+  } catch (e) { hideThinking(); addMsg("ai", "⚠ " + escapeHtml(String(e))); setBusy(false); }
+}
+
+function setBusy(b) { busy = b; document.getElementById("sendBtn").disabled = b; }
+
+// ---------- modal helpers ----------
+// ---------- large files: interactive scan + delete ----------
+let lfFiles = [];
+function openLargeFiles() {
+  const body = `
+    <div style="color:var(--dim);margin-bottom:12px">Scan a folder for big files, then select any you want to delete.</div>
+    <label>Folder to scan (blank = your home folder)</label>
+    <input id="lfPath" type="text" placeholder="(home folder)" style="width:100%;margin:4px 0 10px">
+    <label>Minimum size (MB)</label>
+    <input id="lfMin" type="text" value="200" style="width:120px;display:block;margin:4px 0">
+    <div id="lfResult" style="margin-top:14px"></div>`;
+  showModalWide("Find Large Files", body, [
+    { label: "Close", cls: "btn", action: closeModal },
+    { label: "Scan", cls: "btn approve safe", action: scanLarge, keep: true },
+  ]);
+}
+
+let lfLastPath = "", lfLastMin = "200";
+// Reopen the scan panel with the previous inputs and results restored (used by Cancel
+// on the delete confirmation, since that dialog replaces the modal body).
+async function reopenLargeFiles() {
+  openLargeFiles();
+  document.getElementById("lfPath").value = lfLastPath;
+  document.getElementById("lfMin").value = lfLastMin;
+  await scanLarge();
+}
+
+async function scanLarge() {
+  const p = document.getElementById("lfPath").value.trim();
+  const min = document.getElementById("lfMin").value.trim() || "200";
+  lfLastPath = p; lfLastMin = min;
+  const res = document.getElementById("lfResult");
+  res.innerHTML = `<div style="display:flex;align-items:center;gap:10px;color:var(--dim)"><div class="spinner" style="width:22px;height:22px;border-width:3px"></div> Scanning… large folders can take a minute.</div>`;
+  let data;
+  try { data = await api("/api/largefiles", { path: p, minMB: parseInt(min, 10) }); }
+  catch (e) { res.innerHTML = `<div style="color:var(--bad)">Scan failed: ${escapeHtml(String(e))}</div>`; return; }
+  if (data.error) { res.innerHTML = `<div style="color:var(--bad)">${escapeHtml(data.error)}</div>`; return; }
+  lfFiles = data.files || [];
+  if (!lfFiles.length) {
+    res.innerHTML = `<div style="color:var(--dim)">No files ≥ ${data.minMB} MB found under ${escapeHtml(data.root)} (scanned ${data.scanned} items).</div>`;
+    return;
+  }
+  let rows = lfFiles.map((f, i) =>
+    `<tr>
+       <td style="padding:4px 8px"><input type="checkbox" class="lfchk" data-i="${i}" onchange="updateLfTotal()"></td>
+       <td style="padding:4px 8px;text-align:right;color:var(--accent);white-space:nowrap">${f.sizeMB.toLocaleString()} MB</td>
+       <td style="padding:4px 8px;font-family:var(--mono);font-size:12px;word-break:break-all">${escapeHtml(f.path)}</td>
+     </tr>`).join("");
+  res.innerHTML = `
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px"><input type="checkbox" id="lfAll" onchange="toggleAllLf(this.checked)"> Select all</label>
+      <span style="color:var(--dim);font-size:13px">${lfFiles.length} files${data.totalFound > lfFiles.length ? " (top " + lfFiles.length + " of " + data.totalFound + ")" : ""}</span>
+      <span id="lfTotal" style="margin-left:auto;font-size:13px;color:var(--dim)">0 selected</span>
+    </div>
+    <div style="max-height:42vh;overflow:auto;border:1px solid var(--line);border-radius:8px">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">${rows}</table>
+    </div>
+    <button id="lfDelete" class="btn approve" style="margin-top:12px" disabled onclick="confirmDeleteLf()">Delete permanently</button>`;
+}
+
+function toggleAllLf(on) {
+  document.querySelectorAll(".lfchk").forEach((c) => (c.checked = on));
+  updateLfTotal();
+}
+function selectedLf() {
+  return Array.from(document.querySelectorAll(".lfchk")).filter((c) => c.checked).map((c) => lfFiles[+c.dataset.i]);
+}
+function updateLfTotal() {
+  const sel = selectedLf();
+  const mb = sel.reduce((s, f) => s + f.sizeMB, 0);
+  document.getElementById("lfTotal").textContent = `${sel.length} selected · ${mb.toLocaleString(undefined,{maximumFractionDigits:0})} MB`;
+  document.getElementById("lfDelete").disabled = sel.length === 0;
+}
+
+function confirmDeleteLf() {
+  const sel = selectedLf();
+  if (!sel.length) return;
+  const mb = sel.reduce((s, f) => s + f.sizeMB, 0);
+  const list = sel.slice(0, 12).map((f) => escapeHtml(f.path)).join("<br>") + (sel.length > 12 ? `<br>…and ${sel.length - 12} more` : "");
+  showModal("⚠ Permanently delete these files?",
+    `<div class="reason">This CANNOT be undone. Files are deleted permanently — NOT moved to the Recycle Bin/Trash.</div>
+     <div style="margin-bottom:8px">${sel.length} files · about ${mb.toLocaleString(undefined,{maximumFractionDigits:0})} MB will be freed:</div>
+     <code style="max-height:30vh;overflow:auto">${list}</code>
+     <div style="margin-top:10px;color:var(--dim);font-size:13px">System and protected paths are refused automatically. A deletion log is saved to the USB drive.</div>`,
+    [
+      { label: "Cancel", cls: "btn", action: () => reopenLargeFiles() },
+      { label: "Yes, delete permanently", cls: "btn approve", action: () => doDeleteLf(sel) },
+    ]);
+}
+
+async function doDeleteLf(sel) {
+  showModal("Deleting…", `<div class="spinner" style="width:26px;height:26px;border-width:3px"></div>`, []);
+  let data;
+  try { data = await api("/api/deletefiles", { paths: sel.map((f) => f.path) }); }
+  catch (e) { showModal("Error", `<div style="color:var(--bad)">${escapeHtml(String(e))}</div>`, [{ label: "Close", cls: "btn", action: closeModal }]); return; }
+  const ok = data.results.filter((r) => r.ok).length;
+  const failed = data.results.filter((r) => !r.ok);
+  let html = `<div style="color:var(--ok);margin-bottom:8px">Deleted ${ok} file(s), freed ${data.freedMB.toLocaleString(undefined,{maximumFractionDigits:0})} MB.</div>`;
+  if (failed.length) html += `<div style="color:var(--warn);margin-bottom:6px">${failed.length} skipped/failed:</div><code style="max-height:30vh;overflow:auto">${failed.map((r) => escapeHtml(r.path.split(/[\\/]/).pop()) + " — " + escapeHtml(r.error)).join("<br>")}</code>`;
+  html += `<div style="margin-top:10px;color:var(--dim);font-size:12px">Log: ${escapeHtml(data.logFile || "")}</div>`;
+  showModal("Done", html, [{ label: "Scan again", cls: "btn approve safe", action: () => openLargeFiles() }, { label: "Close", cls: "btn", action: closeModal }]);
+}
+
+function showModalWide(title, bodyHtml, buttons) {
+  showModal(title, bodyHtml, buttons);
+  document.querySelector(".modal-box").style.width = "720px"; // widen AFTER showModal resets it
+}
+
+function showModal(title, bodyHtml, buttons) {
+  document.querySelector(".modal-box").style.width = ""; // default narrow; showModalWide re-widens
+  document.getElementById("modalHead").textContent = title;
+  document.getElementById("modalBody").innerHTML = bodyHtml;
+  const foot = document.getElementById("modalFoot");
+  foot.innerHTML = "";
+  (buttons || []).forEach((b) => {
+    const el = document.createElement("button");
+    el.className = b.cls; el.textContent = b.label; el.onclick = b.action;
+    foot.appendChild(el);
+  });
+  document.getElementById("modal").classList.add("show");
+}
+let toastTimer = null;
+function showToast(html, ms = 3000) {
+  const t = document.getElementById("toast");
+  t.innerHTML = html;
+  t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("show"), ms);
+}
+function closeModal() { document.getElementById("modal").classList.remove("show"); }
+function escapeHtml(s) { return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+
+// ---------- wiring ----------
+document.querySelectorAll(".tab").forEach((t) => {
+  t.onclick = () => {
+    document.querySelectorAll(".tab").forEach((x) => x.classList.remove("active"));
+    t.classList.add("active");
+    const v = t.dataset.view;
+    document.getElementById("guidedView").classList.toggle("active", v === "guided");
+    document.getElementById("chatView").classList.toggle("active", v === "chat");
+  };
+});
+document.getElementById("sendBtn").onclick = sendChat;
+const ci = document.getElementById("chatInput");
+ci.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat(); } });
+ci.addEventListener("input", () => { ci.style.height = "auto"; ci.style.height = Math.min(ci.scrollHeight, 120) + "px"; });
+
+pollSetup();
+buildGuided();
+</script>
+</body>
+</html>

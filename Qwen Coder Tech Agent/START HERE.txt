@@ -1,0 +1,37 @@
+Qwen Coder Tech Agent + TechKit
+
+Mac:
+Double-click Start-Qwen-Tech-Mac.command
+
+Windows:
+Double-click Start-Qwen-Tech-Windows.cmd
+This is CPU-first for broad compatibility on PCs without a video card.
+
+Windows optional Vulkan test:
+Double-click Start-Qwen-Tech-Windows-Vulkan.cmd
+
+What it does:
+Installs Qwen Code, llama.cpp, and a local Qwen3-4B model to the computer,
+then opens a chat agent wired to the TechKit script library on this drive
+(TechKit folder: 35 vetted diagnostic/repair scripts for Windows and macOS).
+Describe the complaint; the agent picks the right script, runs it, and
+explains the findings.
+
+The TechKit scripts also work WITHOUT the AI - see TechKit\README.md for
+the complaint-to-script table and how to run them by hand.
+
+Safety:
+Scripts are read-only unless forced. Destructive ones dry-run first and
+require confirmation. Administrator accounts can never be deleted or
+disabled by the cleanup scripts - there is no override.
+
+Evidence:
+Triage snapshots, log exports, and action logs are saved to
+TechKit\collections on this drive.
+
+Uninstall:
+Mac: double-click Uninstall-Qwen-Tech-Mac.command
+Windows: double-click Uninstall-Qwen-Tech-Windows.cmd
+
+Logs:
+Each launcher writes run logs to the logs folder on this USB drive.

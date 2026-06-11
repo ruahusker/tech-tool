@@ -1,0 +1,875 @@
+{
+  "techkit_version": "1.0",
+  "description": "Technician script library. Every script is read-only unless 'destructive' is true. Destructive scripts dry-run by default and require an explicit force flag to act.",
+  "conventions": {
+    "windows": "PowerShell 5.1+. Run: powershell -ExecutionPolicy Bypass -File <script> [params]",
+    "macos": "bash 3.2+. Run: bash <script> [args]. Scripts needing root say so and degrade gracefully without it.",
+    "collections": "Evidence/output bundles are written to TechKit/collections/ on the USB drive."
+  },
+  "scripts": [
+    {
+      "id": "win-system-report",
+      "path": "windows/Get-SystemReport.ps1",
+      "platform": "windows",
+      "category": "sysinfo",
+      "summary": "One-page overview: OS, hardware, BIOS/serial, RAM slots, uptime, domain join, disk summary, pending reboot.",
+      "use_when": [
+        "first look at any machine",
+        "need serial/model/specs",
+        "is it domain joined",
+        "was it rebooted recently"
+      ],
+      "admin": false,
+      "destructive": false,
+      "runtime_seconds": 10,
+      "args": [
+        {
+          "name": "-OutFile",
+          "required": false,
+          "desc": "also save report to a text file"
+        }
+      ],
+      "title": "System Report"
+    },
+    {
+      "id": "win-disk-health",
+      "path": "windows/Get-DiskHealth.ps1",
+      "platform": "windows",
+      "category": "storage",
+      "summary": "SMART status, volume health, free space, dirty bit, disk errors from the System event log.",
+      "use_when": [
+        "slow computer",
+        "freezing",
+        "clicking noises",
+        "boot failures",
+        "file corruption"
+      ],
+      "admin": "optional (SMART/wear data needs it)",
+      "destructive": false,
+      "runtime_seconds": 15,
+      "args": [
+        {
+          "name": "-EventHours",
+          "required": false,
+          "default": 168,
+          "desc": "event log look-back window"
+        }
+      ],
+      "title": "Disk Health"
+    },
+    {
+      "id": "win-top-processes",
+      "path": "windows/Get-TopProcesses.ps1",
+      "platform": "windows",
+      "category": "performance",
+      "summary": "Top CPU and memory consumers (sampled), memory/pagefile pressure.",
+      "use_when": [
+        "computer is slow right now",
+        "fan always running",
+        "out of memory errors"
+      ],
+      "admin": false,
+      "destructive": false,
+      "runtime_seconds": 10,
+      "args": [
+        {
+          "name": "-SampleSeconds",
+          "required": false,
+          "default": 5
+        },
+        {
+          "name": "-Top",
+          "required": false,
+          "default": 12
+        }
+      ],
+      "title": "Resource Usage"
+    },
+    {
+      "id": "win-startup-items",
+      "path": "windows/Get-StartupItems.ps1",
+      "platform": "windows",
+      "category": "performance",
+      "summary": "Run keys, startup folders, logon scheduled tasks, auto-services that are stopped, WMI startup inventory.",
+      "use_when": [
+        "slow startup",
+        "popups at login",
+        "suspected unwanted software persistence",
+        "service won't start"
+      ],
+      "admin": false,
+      "destructive": false,
+      "runtime_seconds": 10,
+      "args": [],
+      "title": "Startup Programs"
+    },
+    {
+      "id": "win-network-diagnostics",
+      "path": "windows/Get-NetworkDiagnostics.ps1",
+      "platform": "windows",
+      "category": "network",
+      "summary": "Layered check: adapters, IP/DHCP, gateway ping, internet by IP, DNS, HTTP/captive portal, proxy, Wi-Fi signal.",
+      "use_when": [
+        "no internet",
+        "intermittent connection",
+        "only some sites work",
+        "slow network"
+      ],
+      "admin": false,
+      "destructive": false,
+      "runtime_seconds": 25,
+      "args": [],
+      "title": "Network Diagnostics"
+    },
+    {
+      "id": "win-test-connectivity",
+      "path": "windows/Test-Connectivity.ps1",
+      "platform": "windows",
+      "category": "network",
+      "summary": "Targeted test to one host: DNS, ping, TCP port, optional traceroute.",
+      "use_when": [
+        "can't reach a specific server/printer/share",
+        "app cannot connect to backend"
+      ],
+      "admin": false,
+      "destructive": false,
+      "runtime_seconds": 20,
+      "args": [
+        {
+          "name": "-Target",
+          "required": true,
+          "desc": "hostname or IP"
+        },
+        {
+          "name": "-Port",
+          "required": false,
+          "desc": "TCP port the app uses"
+        },
+        {
+          "name": "-TraceRoute",
+          "required": false
+        }
+      ],
+      "title": "Connectivity Test"
+    },
+    {
+      "id": "win-event-summary",
+      "path": "windows/Get-EventLogSummary.ps1",
+      "platform": "windows",
+      "category": "logs",
+      "summary": "Groups recent System/Application errors by source; lists distinct errors; flags BSODs, app crashes, dirty shutdowns.",
+      "use_when": [
+        "random crashes/reboots",
+        "blue screens",
+        "app keeps crashing",
+        "what went wrong yesterday"
+      ],
+      "admin": false,
+      "destructive": false,
+      "runtime_seconds": 30,
+      "args": [
+        {
+          "name": "-Hours",
+          "required": false,
+          "default": 48
+        },
+        {
+          "name": "-Top",
+          "required": false,
+          "default": 15
+        }
+      ],
+      "title": "Event Log Summary"
+    },
+    {
+      "id": "win-export-eventlogs",
+      "path": "windows/Export-EventLogs.ps1",
+      "platform": "windows",
+      "category": "logs",
+      "summary": "Export System/Application(/Security if admin) .evtx plus systeminfo/ipconfig/hotfixes to the USB collections folder.",
+      "use_when": [
+        "need to take evidence away for analysis",
+        "escalating to another team"
+      ],
+      "admin": "optional (Security log needs it)",
+      "destructive": false,
+      "runtime_seconds": 40,
+      "args": [
+        {
+          "name": "-Destination",
+          "required": false,
+          "desc": "output folder; defaults to USB collections"
+        }
+      ],
+      "title": "Export Event Logs"
+    },
+    {
+      "id": "win-update-status",
+      "path": "windows/Get-WindowsUpdateStatus.ps1",
+      "platform": "windows",
+      "category": "updates",
+      "summary": "Build/UBR, recent hotfixes, WU agent history with failures flagged, WU services, pending reboot, free space.",
+      "use_when": [
+        "updates keep failing",
+        "is this machine patched",
+        "stuck on old build"
+      ],
+      "admin": false,
+      "destructive": false,
+      "runtime_seconds": 20,
+      "args": [],
+      "title": "Update Status"
+    },
+    {
+      "id": "win-security-status",
+      "path": "windows/Get-SecurityStatus.ps1",
+      "platform": "windows",
+      "category": "security",
+      "summary": "AV state, firewall profiles, BitLocker, UAC, local admins, RDP/WinRM, SMBv1, SecureBoot/TPM.",
+      "use_when": [
+        "security audit",
+        "suspected infection",
+        "compliance check",
+        "before handing machine back"
+      ],
+      "admin": "optional (BitLocker/TPM/SMB-feature detail)",
+      "destructive": false,
+      "runtime_seconds": 20,
+      "args": [],
+      "title": "Security Check"
+    },
+    {
+      "id": "win-user-report",
+      "path": "windows/Get-UserAccountReport.ps1",
+      "platform": "windows",
+      "category": "accounts",
+      "summary": "Local users with last logon and password age, who is logged on, profile folder sizes, Administrators members.",
+      "use_when": [
+        "account audit",
+        "before deleting/disabling users",
+        "who uses this machine"
+      ],
+      "admin": false,
+      "destructive": false,
+      "runtime_seconds": 60,
+      "args": [
+        {
+          "name": "-SkipProfileSizes",
+          "required": false,
+          "desc": "skip the slow folder measuring"
+        }
+      ],
+      "title": "User Accounts"
+    },
+    {
+      "id": "win-remove-inactive-users",
+      "path": "windows/Remove-InactiveUsers.ps1",
+      "platform": "windows",
+      "category": "accounts",
+      "summary": "Disable (default) or delete local users inactive N days. Dry-run unless -Force. Admin accounts are NEVER touched (no override). Also protects built-ins and the current user.",
+      "use_when": [
+        "clean up shared/lab machine accounts",
+        "remove departed-user local accounts"
+      ],
+      "admin": true,
+      "destructive": true,
+      "dry_run_default": true,
+      "runtime_seconds": 15,
+      "args": [
+        {
+          "name": "-DaysInactive",
+          "required": false,
+          "default": 90
+        },
+        {
+          "name": "-Delete",
+          "required": false,
+          "desc": "delete instead of disable"
+        },
+        {
+          "name": "-RemoveProfile",
+          "required": false,
+          "desc": "with -Delete, also remove profile folder"
+        },
+        {
+          "name": "-IncludeNeverLoggedOn",
+          "required": false
+        },
+        {
+          "name": "-Exclude",
+          "required": false,
+          "desc": "comma-separated account names to protect"
+        },
+        {
+          "name": "-Force",
+          "required": false,
+          "desc": "actually apply; otherwise dry run"
+        }
+      ],
+      "title": "Remove Inactive Users"
+    },
+    {
+      "id": "win-find-large-files",
+      "path": "windows/Find-LargeFiles.ps1",
+      "platform": "windows",
+      "category": "storage",
+      "summary": "Largest files, first-level folder sizes, known hogs (WU cache, hiberfil, Windows.old, recycle bin).",
+      "use_when": [
+        "disk full",
+        "what is using all the space"
+      ],
+      "admin": false,
+      "destructive": false,
+      "runtime_seconds": 180,
+      "args": [
+        {
+          "name": "-Path",
+          "required": false,
+          "default": "C:\\"
+        },
+        {
+          "name": "-Top",
+          "required": false,
+          "default": 25
+        },
+        {
+          "name": "-MinSizeMB",
+          "required": false,
+          "default": 100
+        }
+      ],
+      "title": "Find Large Files"
+    },
+    {
+      "id": "win-clear-temp",
+      "path": "windows/Clear-TempFiles.ps1",
+      "platform": "windows",
+      "category": "storage",
+      "summary": "Clean temp folders, WER queue, optionally WU download cache and Recycle Bin. Dry-run unless -Force.",
+      "use_when": [
+        "free up disk space quickly",
+        "before feature update on a full disk"
+      ],
+      "admin": "optional (Windows temp / WU cache need it)",
+      "destructive": true,
+      "dry_run_default": true,
+      "runtime_seconds": 60,
+      "args": [
+        {
+          "name": "-IncludeWindowsUpdate",
+          "required": false
+        },
+        {
+          "name": "-IncludeRecycleBin",
+          "required": false
+        },
+        {
+          "name": "-Force",
+          "required": false
+        }
+      ],
+      "title": "Clean Temp Files"
+    },
+    {
+      "id": "win-installed-software",
+      "path": "windows/Get-InstalledSoftware.ps1",
+      "platform": "windows",
+      "category": "sysinfo",
+      "summary": "Registry-based app inventory (64/32-bit/per-user) with install dates. -SortByDate finds 'what changed last week'.",
+      "use_when": [
+        "what's installed",
+        "did something install right before the problem started",
+        "license audit"
+      ],
+      "admin": false,
+      "destructive": false,
+      "runtime_seconds": 10,
+      "args": [
+        {
+          "name": "-Search",
+          "required": false,
+          "desc": "name filter"
+        },
+        {
+          "name": "-SortByDate",
+          "required": false
+        }
+      ],
+      "title": "Installed Software"
+    },
+    {
+      "id": "win-printer-diagnostics",
+      "path": "windows/Get-PrinterDiagnostics.ps1",
+      "platform": "windows",
+      "category": "printing",
+      "summary": "Spooler state, printers/ports/drivers, stuck jobs. -ClearQueue purges the queue (admin).",
+      "use_when": [
+        "can't print",
+        "print job stuck",
+        "printer offline"
+      ],
+      "admin": "only for -ClearQueue/-RestartSpooler",
+      "destructive": "only with -ClearQueue",
+      "runtime_seconds": 15,
+      "args": [
+        {
+          "name": "-ClearQueue",
+          "required": false
+        },
+        {
+          "name": "-RestartSpooler",
+          "required": false
+        }
+      ],
+      "title": "Printer Diagnostics"
+    },
+    {
+      "id": "win-battery-report",
+      "path": "windows/Get-BatteryReport.ps1",
+      "platform": "windows",
+      "category": "hardware",
+      "summary": "Battery health: design vs full-charge capacity, cycle count; generates HTML report. Skips desktops.",
+      "use_when": [
+        "laptop battery drains fast",
+        "won't hold charge",
+        "shuts off at 30%"
+      ],
+      "admin": false,
+      "destructive": false,
+      "runtime_seconds": 15,
+      "args": [],
+      "title": "Battery Health"
+    },
+    {
+      "id": "win-repair-systemfiles",
+      "path": "windows/Repair-SystemFiles.ps1",
+      "platform": "windows",
+      "category": "repair",
+      "summary": "DISM + SFC. Default diagnoses only; -Repair runs RestoreHealth + scannow (15-60 min).",
+      "use_when": [
+        "Windows Update failures",
+        "missing DLL / corrupt system file errors",
+        "start menu/explorer corruption",
+        "post-malware cleanup"
+      ],
+      "admin": true,
+      "destructive": false,
+      "runtime_seconds": 1800,
+      "args": [
+        {
+          "name": "-Repair",
+          "required": false,
+          "desc": "actually repair instead of diagnose"
+        }
+      ],
+      "title": "Repair System Files"
+    },
+    {
+      "id": "win-triage-snapshot",
+      "path": "windows/Invoke-TriageSnapshot.ps1",
+      "platform": "windows",
+      "category": "triage",
+      "summary": "Runs all read-only diagnostics + raw extras (ipconfig, netstat, drivers, tasks), saves+zips to USB collections.",
+      "use_when": [
+        "unknown problem - collect everything first",
+        "intermittent issue to analyze later",
+        "gather evidence for the AI to analyze"
+      ],
+      "admin": "optional (more data with it)",
+      "destructive": false,
+      "runtime_seconds": 240,
+      "args": [
+        {
+          "name": "-OutDir",
+          "required": false
+        }
+      ],
+      "title": "Full Triage Snapshot"
+    },
+    {
+      "id": "mac-system-report",
+      "path": "macos/system_report.sh",
+      "platform": "macos",
+      "category": "sysinfo",
+      "summary": "Model/chip/serial, macOS version, Rosetta, uptime, memory+swap pressure, storage summary, battery, reboot history.",
+      "use_when": [
+        "first look at any Mac",
+        "need specs/serial",
+        "general health check"
+      ],
+      "admin": false,
+      "destructive": false,
+      "runtime_seconds": 10,
+      "args": [],
+      "title": "System Report"
+    },
+    {
+      "id": "mac-disk-health",
+      "path": "macos/disk_health.sh",
+      "platform": "macos",
+      "category": "storage",
+      "summary": "SMART status, APFS container usage, snapshot count; --verify runs live read-only volume check.",
+      "use_when": [
+        "slow Mac",
+        "disk full mysteries",
+        "suspected drive failure",
+        "filesystem errors"
+      ],
+      "admin": false,
+      "destructive": false,
+      "runtime_seconds": 15,
+      "args": [
+        {
+          "name": "--verify",
+          "required": false,
+          "desc": "live filesystem verify, a few minutes"
+        }
+      ],
+      "title": "Disk Health"
+    },
+    {
+      "id": "mac-top-processes",
+      "path": "macos/top_processes.sh",
+      "platform": "macos",
+      "category": "performance",
+      "summary": "Top CPU/memory processes, memory pressure, swap, hung (I/O-stuck) processes, thermal throttling.",
+      "use_when": [
+        "Mac is slow",
+        "fans loud",
+        "beachballs",
+        "battery draining fast"
+      ],
+      "admin": false,
+      "destructive": false,
+      "runtime_seconds": 15,
+      "args": [
+        {
+          "name": "top_n",
+          "required": false,
+          "default": 12,
+          "desc": "positional: how many processes"
+        }
+      ],
+      "title": "Resource Usage"
+    },
+    {
+      "id": "mac-startup-items",
+      "path": "macos/startup_items.sh",
+      "platform": "macos",
+      "category": "performance",
+      "summary": "Third-party LaunchDaemons/Agents with target binaries, login items, BTM dump, running non-Apple jobs, cron.",
+      "use_when": [
+        "slow login",
+        "popups",
+        "suspected adware/persistence",
+        "mystery background process"
+      ],
+      "admin": false,
+      "destructive": false,
+      "runtime_seconds": 10,
+      "args": [],
+      "title": "Startup Programs"
+    },
+    {
+      "id": "mac-network-diagnostics",
+      "path": "macos/network_diagnostics.sh",
+      "platform": "macos",
+      "category": "network",
+      "summary": "Layered check: interfaces, gateway, internet by IP, DNS, captive-portal/HTTP, DNS config, proxy, Wi-Fi, VPN tunnels.",
+      "use_when": [
+        "no internet",
+        "Wi-Fi connected but nothing loads",
+        "only some sites work",
+        "VPN suspicion"
+      ],
+      "admin": false,
+      "destructive": false,
+      "runtime_seconds": 20,
+      "args": [],
+      "title": "Network Diagnostics"
+    },
+    {
+      "id": "mac-test-connectivity",
+      "path": "macos/test_connectivity.sh",
+      "platform": "macos",
+      "category": "network",
+      "summary": "Targeted host test: DNS (system + direct), ping, TCP port via nc, optional traceroute.",
+      "use_when": [
+        "can't reach a specific server/printer/share"
+      ],
+      "admin": false,
+      "destructive": false,
+      "runtime_seconds": 20,
+      "args": [
+        {
+          "name": "host",
+          "required": true,
+          "positional": true
+        },
+        {
+          "name": "port",
+          "required": false,
+          "positional": true
+        },
+        {
+          "name": "--trace",
+          "required": false
+        }
+      ],
+      "title": "Connectivity Test"
+    },
+    {
+      "id": "mac-log-summary",
+      "path": "macos/log_summary.sh",
+      "platform": "macos",
+      "category": "logs",
+      "summary": "Crash/hang/panic reports (7d) with per-app frequency, unified-log errors by source, shutdown causes.",
+      "use_when": [
+        "app keeps crashing",
+        "Mac restarted by itself",
+        "kernel panic",
+        "what went wrong"
+      ],
+      "admin": false,
+      "destructive": false,
+      "runtime_seconds": 60,
+      "args": [
+        {
+          "name": "hours",
+          "required": false,
+          "default": 4,
+          "positional": true
+        }
+      ],
+      "title": "Crash & Log Summary"
+    },
+    {
+      "id": "mac-collect-logs",
+      "path": "macos/collect_logs.sh",
+      "platform": "macos",
+      "category": "logs",
+      "summary": "Bundle crash reports + unified-log errors + install/system/wifi log tails into tar.gz on USB; sudo adds .logarchive.",
+      "use_when": [
+        "take evidence away",
+        "escalate with attachments",
+        "gather data for the AI to analyze"
+      ],
+      "admin": "optional (logarchive needs sudo)",
+      "destructive": false,
+      "runtime_seconds": 90,
+      "args": [
+        {
+          "name": "hours",
+          "required": false,
+          "default": 4,
+          "positional": true
+        }
+      ],
+      "title": "Collect Logs"
+    },
+    {
+      "id": "mac-update-status",
+      "path": "macos/update_status.sh",
+      "platform": "macos",
+      "category": "updates",
+      "summary": "Version/build, update history, auto-update settings; --check queries Apple for pending updates.",
+      "use_when": [
+        "is this Mac up to date",
+        "update stuck or failing"
+      ],
+      "admin": false,
+      "destructive": false,
+      "runtime_seconds": 15,
+      "args": [
+        {
+          "name": "--check",
+          "required": false,
+          "desc": "query Apple (network, ~30s)"
+        }
+      ],
+      "title": "Update Status"
+    },
+    {
+      "id": "mac-security-status",
+      "path": "macos/security_status.sh",
+      "platform": "macos",
+      "category": "security",
+      "summary": "SIP, Gatekeeper, FileVault, firewall, XProtect versions, admin users, SSH/screen/file sharing, 3rd-party extensions.",
+      "use_when": [
+        "security check",
+        "suspected malware",
+        "before handing the Mac back",
+        "is remote access enabled"
+      ],
+      "admin": false,
+      "destructive": false,
+      "runtime_seconds": 15,
+      "args": [],
+      "title": "Security Check"
+    },
+    {
+      "id": "mac-user-report",
+      "path": "macos/user_account_report.sh",
+      "platform": "macos",
+      "category": "accounts",
+      "summary": "Local users (uid>=500) with admin flag and last login, logged-in users, home sizes (--sizes), hidden/disabled markers.",
+      "use_when": [
+        "account audit",
+        "before user cleanup",
+        "who uses this Mac"
+      ],
+      "admin": false,
+      "destructive": false,
+      "runtime_seconds": 15,
+      "args": [
+        {
+          "name": "--sizes",
+          "required": false,
+          "desc": "measure home folders (slow)"
+        }
+      ],
+      "title": "User Accounts"
+    },
+    {
+      "id": "mac-remove-inactive-users",
+      "path": "macos/remove_inactive_users.sh",
+      "platform": "macos",
+      "category": "accounts",
+      "summary": "Disable (default) or delete local users with no login in N days. Dry-run unless --force (sudo). Admin accounts are NEVER touched (no override). Also protects the current user.",
+      "use_when": [
+        "clean up shared Mac accounts",
+        "remove departed-user accounts"
+      ],
+      "admin": true,
+      "destructive": true,
+      "dry_run_default": true,
+      "runtime_seconds": 15,
+      "args": [
+        {
+          "name": "days",
+          "required": false,
+          "default": 90,
+          "positional": true
+        },
+        {
+          "name": "--delete",
+          "required": false
+        },
+        {
+          "name": "--remove-home",
+          "required": false
+        },
+        {
+          "name": "--include-unknown",
+          "required": false
+        },
+        {
+          "name": "--exclude",
+          "required": false,
+          "desc": "comma-separated usernames"
+        },
+        {
+          "name": "--force",
+          "required": false,
+          "desc": "actually apply (needs sudo)"
+        }
+      ],
+      "title": "Remove Inactive Users"
+    },
+    {
+      "id": "mac-find-large-files",
+      "path": "macos/find_large_files.sh",
+      "platform": "macos",
+      "category": "storage",
+      "summary": "Largest files (Spotlight-accelerated), folder sizes, known hogs (iOS backups, Xcode, Docker, Trash, snapshots).",
+      "use_when": [
+        "disk full",
+        "what is using the space"
+      ],
+      "admin": false,
+      "destructive": false,
+      "runtime_seconds": 60,
+      "args": [
+        {
+          "name": "path",
+          "required": false,
+          "default": "/Users",
+          "positional": true
+        },
+        {
+          "name": "min_size_mb",
+          "required": false,
+          "default": 200,
+          "positional": true
+        }
+      ],
+      "title": "Find Large Files"
+    },
+    {
+      "id": "mac-clear-caches",
+      "path": "macos/clear_caches.sh",
+      "platform": "macos",
+      "category": "storage",
+      "summary": "Clean user caches, 30d+ old logs, saved app state, optional Trash. Dry-run unless --force.",
+      "use_when": [
+        "free space safely",
+        "weird app behavior possibly cache-related"
+      ],
+      "admin": false,
+      "destructive": true,
+      "dry_run_default": true,
+      "runtime_seconds": 60,
+      "args": [
+        {
+          "name": "--force",
+          "required": false
+        },
+        {
+          "name": "--trash",
+          "required": false,
+          "desc": "also empty Trash"
+        }
+      ],
+      "title": "Clean Caches"
+    },
+    {
+      "id": "mac-battery-health",
+      "path": "macos/battery_health.sh",
+      "platform": "macos",
+      "category": "hardware",
+      "summary": "Cycle count, condition, capacity vs design from system_profiler + ioreg, charger info. Skips desktops.",
+      "use_when": [
+        "MacBook battery complaints",
+        "random shutdowns on battery"
+      ],
+      "admin": false,
+      "destructive": false,
+      "runtime_seconds": 10,
+      "args": [],
+      "title": "Battery Health"
+    },
+    {
+      "id": "mac-triage-snapshot",
+      "path": "macos/triage_snapshot.sh",
+      "platform": "macos",
+      "category": "triage",
+      "summary": "Runs all read-only diagnostics + raw extras (ifconfig, ps, system_profiler), saves+tars to USB collections.",
+      "use_when": [
+        "unknown problem - collect everything",
+        "intermittent issue",
+        "gather evidence for AI analysis"
+      ],
+      "admin": false,
+      "destructive": false,
+      "runtime_seconds": 240,
+      "args": [
+        {
+          "name": "out_dir",
+          "required": false,
+          "positional": true
+        }
+      ],
+      "title": "Full Triage Snapshot"
+    }
+  ]
+}
