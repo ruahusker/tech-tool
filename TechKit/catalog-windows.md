@@ -1,7 +1,7 @@
 ## TechKit script catalog (windows)
 
 Run with: powershell -ExecutionPolicy Bypass -File "__TECHKIT__\windows\<Script>" [params]
-Refer to a tool by its Name (in the analysis, wrap it in **double asterisks** to make it clickable). Full details: __CATALOG__.
+Refer to a tool by its Name (wrap in **double asterisks** in analysis to make it clickable). Full details: __CATALOG__.
 
 - System Report (Get-SystemReport.ps1) — One-page overview: OS, hardware, BIOS/serial, RAM slots, uptime, domain join, disk summary, pending reboot. Use for: first look at any machine; need serial/model/specs; is it domain joined. | args: -OutFile
 - Disk Health (Get-DiskHealth.ps1) — SMART status, volume health, free space, dirty bit, disk errors from the System event log. Use for: slow computer; freezing; clicking noises. | args: -EventHours
@@ -19,6 +19,7 @@ Refer to a tool by its Name (in the analysis, wrap it in **double asterisks** to
 - Find Large Files (Find-LargeFiles.ps1) — Largest files, first-level folder sizes, known hogs (WU cache, hiberfil, Windows.old, recycle bin). Use for: disk full; what is using all the space. | args: -Path -Top -MinSizeMB
 - Clean Temp Files (Clear-TempFiles.ps1) [DESTRUCTIVE-dry-runs-first] — Clean temp folders, WER queue, optionally WU download cache and Recycle Bin. Dry-run unless -Force. Use for: free up disk space quickly; before feature update on a full disk. | args: -IncludeWindowsUpdate -IncludeRecycleBin -Force
 - Installed Software (Get-InstalledSoftware.ps1) — Registry-based app inventory (64/32-bit/per-user) with install dates. -SortByDate finds 'what changed last week'. Use for: what's installed; did something install right before the problem started; license audit. | args: -Search -SortByDate
+- Remove Microsoft 365 (Deep) (Remove-Office365.ps1) [DESTRUCTIVE-dry-runs-first,needs-admin] — Deep uninstall of Microsoft 365/Office: supported uninstall, then removes leftover folders, registry keys, scheduled tasks, and the ClickToRun service a normal uninstall misses; clears cached sign-in/credentials/licensing so products re-authenticate. Never deletes .pst or user docs. Use for: office uninstall left files behind; reinstall office clean; office signed into wrong account. | args: -Force -ResetActivationOnly -RemoveOutlookData
 - Printer Diagnostics (Get-PrinterDiagnostics.ps1) — Spooler state, printers/ports/drivers, stuck jobs. -ClearQueue purges the queue (admin). Use for: can't print; print job stuck; printer offline. | args: -ClearQueue -RestartSpooler
 - Battery Health (Get-BatteryReport.ps1) — Battery health: design vs full-charge capacity, cycle count; generates HTML report. Skips desktops. Use for: laptop battery drains fast; won't hold charge; shuts off at 30%.
 - Repair System Files (Repair-SystemFiles.ps1) [needs-admin] — DISM + SFC. Default diagnoses only; -Repair runs RestoreHealth + scannow (15-60 min). Use for: Windows Update failures; missing DLL / corrupt system file errors; start menu/explorer corruption. | args: -Repair

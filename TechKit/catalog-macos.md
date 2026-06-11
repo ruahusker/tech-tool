@@ -1,7 +1,7 @@
 ## TechKit script catalog (macos)
 
 Run with: bash "__TECHKIT__/macos/<script>" [args]
-Refer to a tool by its Name (in the analysis, wrap it in **double asterisks** to make it clickable). Full details: __CATALOG__.
+Refer to a tool by its Name (wrap in **double asterisks** in analysis to make it clickable). Full details: __CATALOG__.
 
 - System Report (system_report.sh) — Model/chip/serial, macOS version, Rosetta, uptime, memory+swap pressure, storage summary, battery, reboot history. Use for: first look at any Mac; need specs/serial; general health check.
 - Disk Health (disk_health.sh) — SMART status, APFS container usage, snapshot count; --verify runs live read-only volume check. Use for: slow Mac; disk full mysteries; suspected drive failure. | args: --verify

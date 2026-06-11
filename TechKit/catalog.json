@@ -438,6 +438,42 @@
       "title": "Installed Software"
     },
     {
+      "id": "win-remove-office365",
+      "path": "windows/Remove-Office365.ps1",
+      "platform": "windows",
+      "category": "repair",
+      "title": "Remove Microsoft 365 (Deep)",
+      "summary": "Deep uninstall of Microsoft 365/Office: supported uninstall, then removes leftover folders, registry keys, scheduled tasks, and the ClickToRun service a normal uninstall misses; clears cached sign-in/credentials/licensing so products re-authenticate. Never deletes .pst or user docs.",
+      "use_when": [
+        "office uninstall left files behind",
+        "reinstall office clean",
+        "office signed into wrong account",
+        "office won't activate",
+        "office repair failed"
+      ],
+      "admin": true,
+      "destructive": true,
+      "dry_run_default": true,
+      "runtime_seconds": 300,
+      "args": [
+        {
+          "name": "-Force",
+          "required": false,
+          "desc": "actually apply; otherwise dry-run preview"
+        },
+        {
+          "name": "-ResetActivationOnly",
+          "required": false,
+          "desc": "don't uninstall; just clear sign-in/licensing to force re-auth"
+        },
+        {
+          "name": "-RemoveOutlookData",
+          "required": false,
+          "desc": "also clear Outlook .ost cache (never .pst)"
+        }
+      ]
+    },
+    {
       "id": "win-printer-diagnostics",
       "path": "windows/Get-PrinterDiagnostics.ps1",
       "platform": "windows",
