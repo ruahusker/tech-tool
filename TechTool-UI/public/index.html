@@ -23,7 +23,11 @@
   header { display: flex; align-items: center; gap: 13px; padding: 14px 22px; background: rgba(20,15,16,.7); backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); }
   header .logo { width: 34px; height: 34px; border-radius: 9px; background: var(--grad); display: flex; align-items: center; justify-content: center; font-size: 18px; box-shadow: 0 4px 14px rgba(230,23,46,.4); }
   header h1 { font-size: 17px; margin: 0; font-weight: 700; letter-spacing: .2px; background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
-  header .machine { margin-left: auto; font-size: 11.5px; color: var(--dim); text-align: right; line-height: 1.5; }
+  .header-right { margin-left: auto; display: flex; align-items: center; gap: 16px; }
+  header .machine { font-size: 11.5px; color: var(--dim); text-align: right; line-height: 1.5; }
+  .ticket-btn { display: inline-flex; align-items: center; gap: 7px; padding: 8px 15px; border-radius: 10px; cursor: pointer; font-size: 13px; font-weight: 650; color: var(--text); background: var(--panel2); border: 1px solid var(--line2); transition: all .15s; }
+  .ticket-btn:hover { border-color: var(--accent); background: rgba(230,23,46,.12); }
+  .ticket-btn .tcount { font-size: 11px; font-weight: 800; background: var(--grad); color: #fff; border-radius: 999px; padding: 1px 7px; }
   .tabs { display: flex; gap: 6px; padding: 12px 22px; background: rgba(20,15,16,.45); }
   .tab { padding: 9px 18px; border-radius: 999px; cursor: pointer; color: var(--dim); font-size: 13.5px; font-weight: 600; transition: all .15s; border: 1px solid transparent; }
   .tab:hover { color: var(--text); background: rgba(255,255,255,.04); }
@@ -174,7 +178,10 @@
   <header>
     <div class="logo">🛠️</div>
     <h1>Tech Tool</h1>
-    <div class="machine" id="machineInfo"></div>
+    <div class="header-right">
+      <button id="ticketBtn" class="ticket-btn" onclick="openTicket()">📋 Ticket Summary</button>
+      <div class="machine" id="machineInfo"></div>
+    </div>
   </header>
   <div class="tabs">
     <div class="tab active" data-view="guided">Guided</div>
@@ -225,6 +232,7 @@ async function pollSetup() {
     pollFails = 0;
     if (s.machine) document.getElementById("machineInfo").innerHTML =
       `${s.machine.hostname}<br>${s.machine.platform} · ${s.machine.arch} · ${s.machine.ramGB} GB RAM`;
+    updateTicketBadge(s.activityCount || 0);
     if (s.error) {
       document.getElementById("spinner").style.display = "none";
       document.getElementById("setupDetail").textContent = "Setup failed:";
@@ -481,11 +489,13 @@ function formatInline(text) {
 const SECTION_META = {
   "SUMMARY": { icon: "📋", cls: "" }, "FINDINGS": { icon: "🔎", cls: "" },
   "LIKELY CAUSE": { icon: "🧭", cls: "" }, "NEXT STEPS": { icon: "💡", cls: "next-steps" },
+  "ISSUE": { icon: "🎫", cls: "" }, "ACTIONS TAKEN": { icon: "🔧", cls: "" },
+  "RESOLUTION": { icon: "✅", cls: "" }, "FOLLOW-UP": { icon: "💡", cls: "next-steps" },
 };
 function renderAnalysis(text) {
   const lines = String(text).split("\n");
   const secs = []; let cur = { head: null, lines: [] };
-  const hdr = /^\s*(?:\d+\.\s*)?(SUMMARY|FINDINGS|LIKELY CAUSE|NEXT STEPS)\b\s*[:\-–]?\s*(.*)$/i;
+  const hdr = /^\s*(?:\d+\.\s*)?(SUMMARY|FINDINGS|LIKELY CAUSE|NEXT STEPS|ISSUE|ACTIONS TAKEN|RESOLUTION|FOLLOW-?UP)\b\s*[:\-–]?\s*(.*)$/i;
   for (const line of lines) {
     const m = line.match(hdr);
     if (m) { if (cur.head || cur.lines.some((l) => l.trim())) secs.push(cur); cur = { head: m[1].toUpperCase(), lines: m[2].trim() ? [m[2]] : [] }; }
@@ -519,6 +529,35 @@ async function saveReport() {
   if (data.error) { showToast("⚠ " + data.error, 4000); return; }
   const name = (data.file || "").split(/[\\/]/).pop();
   showToast(`<span class="tok">✓</span>Saved to USB: Reports/${escapeHtml(name)}${curReport.analysis ? " (with AI analysis)" : ""}`, 4500);
+}
+
+// ---------- ticket summary ----------
+let ticketText = "";
+async function openTicket() {
+  showModalWide("📋 Ticket Summary", `<div style="display:flex;align-items:center;gap:12px;color:var(--dim)"><div class="spinner" style="width:24px;height:24px;border-width:3px"></div> Reviewing this session and writing a ticket-ready summary…</div>`, [{ label: "Close", cls: "btn", action: closeModal }]);
+  let data;
+  try { data = await api("/api/ticket", {}); }
+  catch (e) { document.getElementById("modalBody").innerHTML = `<div style="color:var(--bad)">Could not generate summary: ${escapeHtml(String(e))}</div>`; return; }
+  if (data.error) { document.getElementById("modalBody").innerHTML = `<div style="color:var(--bad)">${escapeHtml(data.error)}</div>`; return; }
+  ticketText = data.summary;
+  document.getElementById("modalBody").innerHTML = `<div class="analysis">${renderAnalysis(data.summary)}</div>`;
+  document.getElementById("modalFoot").innerHTML = "";
+  [
+    { label: "📋 Copy", cls: "btn", action: () => copyText(ticketText) },
+    { label: "💾 Save to USB", cls: "btn approve safe", action: saveTicket },
+    { label: "Close", cls: "btn", action: closeModal },
+  ].forEach((b) => { const el = document.createElement("button"); el.className = b.cls; el.textContent = b.label; el.onclick = b.action; document.getElementById("modalFoot").appendChild(el); });
+}
+async function saveTicket() {
+  let data;
+  try { data = await api("/api/savereport", { title: "Ticket Summary", output: ticketText, analysis: "" }); }
+  catch (e) { showToast("⚠ Save failed: " + String(e), 4000); return; }
+  if (data.error) { showToast("⚠ " + data.error, 4000); return; }
+  showToast(`<span class="tok">✓</span>Ticket saved to USB: Reports/${escapeHtml((data.file || "").split(/[\\/]/).pop())}`, 4500);
+}
+async function copyText(t) {
+  try { await navigator.clipboard.writeText(t); showToast(`<span class="tok">✓</span>Copied to clipboard`, 2500); }
+  catch (_) { showToast("⚠ Copy blocked by browser — select the text manually", 4000); }
 }
 
 function applyGuided(s, dryArgs) {
@@ -756,6 +795,16 @@ document.getElementById("sendBtn").onclick = sendChat;
 const ci = document.getElementById("chatInput");
 ci.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat(); } });
 ci.addEventListener("input", () => { ci.style.height = "auto"; ci.style.height = Math.min(ci.scrollHeight, 120) + "px"; });
+
+function updateTicketBadge(n) {
+  const btn = document.getElementById("ticketBtn");
+  if (!btn) return;
+  btn.innerHTML = "📋 Ticket Summary" + (n > 0 ? ` <span class="tcount">${n}</span>` : "");
+}
+// keep the activity count fresh after setup completes
+setInterval(async () => {
+  try { const s = await api("/api/status"); updateTicketBadge(s.activityCount || 0); } catch (_) {}
+}, 5000);
 
 pollSetup();
 buildGuided();

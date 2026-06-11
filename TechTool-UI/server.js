@@ -43,6 +43,23 @@ const EXPECTED_MODEL_ID = "local/" + MODEL_FILE.replace(/\.gguf$/, "");
 const status = { step: "starting", detail: "", ready: false, error: null, modelId: null };
 const sessions = new Map(); // sessionId -> { messages: [], pending: null }
 let catalog = null;
+
+// Session activity log — feeds the "Ticket Summary" feature.
+const activity = [];
+function logActivity(entry) {
+  activity.push({ t: new Date().toISOString(), ...entry });
+  if (activity.length > 200) activity.shift();
+}
+// Keep the signal from a tool's output: flagged [!] lines + a short head, trimmed.
+function digestOutput(output) {
+  const text = String(output || "");
+  const lines = text.split("\n");
+  const flagged = lines.filter((l) => l.includes("[!]")).slice(0, 12);
+  const head = lines.filter((l) => l.trim()).slice(0, 4);
+  let d = (flagged.length ? "Flags:\n" + flagged.join("\n") + "\n" : "") + head.join("\n");
+  if (d.length > 1000) d = d.slice(0, 1000) + " …";
+  return d.trim();
+}
 let llamaProc = null;
 
 function log(msg) {
@@ -495,6 +512,34 @@ async function analyzeOutput(title, output, instruction) {
   return msg.content || "(no analysis returned)";
 }
 
+// Turn the session activity log into a closing ticket note.
+async function buildTicketSummary() {
+  const fmtTimeShort = (iso) => { try { return new Date(iso).toLocaleTimeString(); } catch (_) { return iso; } };
+  const lines = activity.map((a) => {
+    if (a.kind === "ask") return `[${fmtTimeShort(a.t)}] Technician asked: "${a.text}"`;
+    if (a.kind === "delete") return `[${fmtTimeShort(a.t)}] Deleted ${a.count} file(s), freed ${a.freedMB} MB`;
+    if (a.kind === "shell") return `[${fmtTimeShort(a.t)}] Ran shell command: ${a.command} (exit ${a.code})${a.digest ? "\n  " + a.digest.replace(/\n/g, "\n  ") : ""}`;
+    const who = a.via === "assistant" ? " (via AI)" : "";
+    return `[${fmtTimeShort(a.t)}] Ran ${a.tool}${a.args && a.args.length ? " " + a.args.join(" ") : ""}${who} (exit ${a.code})${a.digest ? "\n  " + a.digest.replace(/\n/g, "\n  ") : ""}`;
+  });
+  let logText = lines.join("\n");
+  if (logText.length > 14000) logText = logText.slice(0, 14000) + "\n…[older activity trimmed]…";
+
+  const sys = [
+    "You are an IT technician writing the closing note for a support ticket, based on a log of what was done during the session.",
+    "Write a concise, professional summary ready to paste into a ticketing system. Use these section headers, each on its own line:",
+    "ISSUE - the apparent reason for the visit, inferred from what was checked/asked. One or two sentences.",
+    "ACTIONS TAKEN - bulleted list of the diagnostics run and changes made, in plain language (not script filenames).",
+    "FINDINGS - the notable results, especially anything flagged with [!]; call out errors/failures clearly. If nothing notable, say the system checked out.",
+    "RESOLUTION - what state things are in now / what was fixed.",
+    "FOLLOW-UP - recommended next steps or items to monitor, if any.",
+    "Be factual — only state what the log supports. Do not invent results. Keep it under 300 words.",
+  ].join("\n");
+  const user = `Machine: ${os.hostname()} (${PLATFORM}). Session activity log:\n\n${logText}`;
+  const msg = await llamaChat([{ role: "system", content: sys }, { role: "user", content: user }], { noTools: true });
+  return msg.content || "(no summary returned)";
+}
+
 function getSession(id) {
   if (!sessions.has(id)) {
     sessions.set(id, { messages: [{ role: "system", content: buildSystemPrompt() }], pending: null });
@@ -514,9 +559,15 @@ async function executeToolCall(name, args) {
   if (name === "run_techkit_script") {
     const entry = scriptById(args.id);
     if (!entry) return { code: -1, output: `Unknown script id '${args.id}'. Valid ids: ${catalog.map((s) => s.id).join(", ")}` };
-    return runScript(entry, args.args || []);
+    const r = await runScript(entry, args.args || []);
+    logActivity({ kind: "tool", via: "assistant", tool: entry.title || entry.path.split("/").pop(), args: args.args || [], code: r.code, digest: digestOutput(r.output) });
+    return r;
   }
-  if (name === "run_shell") return runShell(args.command || "");
+  if (name === "run_shell") {
+    const r = await runShell(args.command || "");
+    logActivity({ kind: "shell", via: "assistant", command: args.command || "", code: r.code, digest: digestOutput(r.output) });
+    return r;
+  }
   return { code: -1, output: "Unknown tool " + name };
 }
 
@@ -584,6 +635,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "GET" && url.pathname === "/api/status") {
       return send(res, 200, {
         ...status,
+        activityCount: activity.length,
         machine: { hostname: os.hostname(), platform: PLATFORM, arch: os.arch(), ramGB: Math.round(os.totalmem() / 1073741824) },
       });
     }
@@ -596,6 +648,7 @@ const server = http.createServer(async (req, res) => {
       if (!entry) return send(res, 404, { error: "unknown script id" });
       log(`guided run: ${id} ${(args || []).join(" ")}`);
       const result = await runScript(entry, args || []);
+      logActivity({ kind: "tool", via: "guided", tool: entry.title || entry.path.split("/").pop(), args: args || [], code: result.code, digest: digestOutput(result.output) });
       return send(res, 200, result);
     }
     if (req.method === "POST" && url.pathname === "/api/analyze") {
@@ -635,6 +688,7 @@ const server = http.createServer(async (req, res) => {
       const session = getSession(sid || "default");
       if (session.pending) return send(res, 409, { error: "approval pending" });
       session.messages.push({ role: "user", content: String(message || "") });
+      logActivity({ kind: "ask", text: String(message || "").slice(0, 300) });
       const out = await agentLoop(session, []);
       return send(res, 200, out);
     }
@@ -676,11 +730,20 @@ const server = http.createServer(async (req, res) => {
       const paths = Array.isArray(body.paths) ? body.paths.filter((p) => typeof p === "string") : [];
       if (!paths.length) return send(res, 400, { error: "no paths provided" });
       const out = deleteFilesPermanently(paths);
+      const okCount = out.results.filter((r) => r.ok).length;
+      logActivity({ kind: "delete", count: okCount, freedMB: +(out.freedBytes / 1048576).toFixed(1) });
       return send(res, 200, { ...out, freedMB: +(out.freedBytes / 1048576).toFixed(1) });
+    }
+    if (req.method === "POST" && url.pathname === "/api/ticket") {
+      if (!status.ready) return send(res, 503, { error: "AI engine not ready yet" });
+      if (!activity.length) return send(res, 200, { summary: "No activity recorded this session yet. Run a tool or two, then generate a summary." });
+      const summary = await buildTicketSummary();
+      return send(res, 200, { summary });
     }
     if (req.method === "POST" && url.pathname === "/api/reset") {
       const { session: sid } = await readBody(req);
       sessions.delete(sid || "default");
+      if ((sid || "default") === "default") activity.length = 0; // clearing the session also clears the log
       return send(res, 200, { ok: true });
     }
     send(res, 404, { error: "not found" });

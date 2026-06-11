@@ -221,6 +221,46 @@
       "title": "Update Status"
     },
     {
+      "id": "win-repair-windowsupdate",
+      "path": "windows/Repair-WindowsUpdate.ps1",
+      "platform": "windows",
+      "category": "updates",
+      "title": "Repair Windows Update",
+      "summary": "Resets Windows Update: stops wuauserv/BITS/cryptsvc/msiserver, renames SoftwareDistribution + catroot2, clears the BITS queue, restarts services, triggers a fresh scan. Optional DISM+SFC and deep reset.",
+      "use_when": [
+        "windows update stuck or failing",
+        "update error codes",
+        "updates won't download or install",
+        "0x8024 / 0x80070 errors"
+      ],
+      "admin": true,
+      "destructive": true,
+      "dry_run_default": true,
+      "runtime_seconds": 120,
+      "args": [
+        {
+          "name": "-Force",
+          "required": false,
+          "desc": "actually apply; otherwise dry-run preview"
+        },
+        {
+          "name": "-RepairImage",
+          "required": false,
+          "desc": "also run DISM RestoreHealth + SFC (15-45 min)"
+        },
+        {
+          "name": "-DeepReset",
+          "required": false,
+          "desc": "also re-register WU/BITS DLLs + reset Winsock (reboot after)"
+        },
+        {
+          "name": "-SkipCatroot2",
+          "required": false,
+          "desc": "leave catroot2 untouched"
+        }
+      ]
+    },
+    {
       "id": "win-security-status",
       "path": "windows/Get-SecurityStatus.ps1",
       "platform": "windows",
