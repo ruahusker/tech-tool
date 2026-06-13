@@ -685,7 +685,8 @@ async function openTicket() {
   foot.innerHTML = "";
   [
     { label: blab("copy", "Copy"), cls: "btn", action: () => copyText(ticketText) },
-    { label: blab("download", "Save to USB"), cls: "btn approve safe", action: saveTicket },
+    { label: blab("download", "Save to USB"), cls: "btn", action: saveTicket },
+    { label: blab("external", "Send to TeamDynamix"), cls: "btn approve safe", action: () => sendToTdx(ticketText) },
     { label: blab("x", "Close"), cls: "btn", action: closeModal },
   ].forEach((b) => { const el = document.createElement("button"); el.className = b.cls; el.innerHTML = b.label; el.onclick = b.action; foot.appendChild(el); });
 }
@@ -699,6 +700,58 @@ async function saveTicket() {
 async function copyText(t) {
   try { await navigator.clipboard.writeText(t); showToast(`${icon("check", 16, "tok")} Copied to clipboard`, 2500); }
   catch (_) { showToast(`${icon("alert", 16)} Copy blocked by browser — select the text manually`, 4000); }
+}
+
+// ---------- TeamDynamix hand-off (no credentials; uses your existing browser login) ----------
+let tdxText = "";
+function tdxTemplate() { try { return localStorage.getItem("tdxTicketUrl") || ""; } catch (_) { return ""; } }
+function deriveTdxTemplate(url) {
+  url = String(url || "").trim();
+  if (!/^https?:\/\//i.test(url)) return "";
+  if (/TicketID=\d+/i.test(url)) return url.replace(/(TicketID=)\d+/i, "$1{ID}");
+  if (/\d/.test(url)) return url.replace(/\d+(?!.*\d)/, "{ID}"); // replace the last run of digits
+  return "";
+}
+function resetTdxTemplate() { try { localStorage.removeItem("tdxTicketUrl"); } catch (_) {} showToast(`${icon("check", 16, "tok")} TeamDynamix address cleared — you'll set it again next time`, 3500); }
+
+function sendToTdx(text) {
+  tdxText = text || "";
+  navigator.clipboard.writeText(tdxText).catch(() => {});
+  const haveTmpl = !!tdxTemplate();
+  const setup = haveTmpl ? "" : `
+    <label>One-time setup — paste the web address of any TeamDynamix ticket</label>
+    <input id="tdxUrl" type="text" placeholder="https://nusupport.nebraska.edu/...TicketID=1234567">
+    <div style="color:var(--text-3);font-size:12px;margin:5px 0 4px">Open any ticket in TDX, copy its address from the browser bar, and paste it here. We'll remember the format so next time you only enter the number.</div>`;
+  const body = `
+    <div style="display:flex;gap:9px;align-items:center;color:var(--ok);background:var(--ok-soft);border:1px solid #bfe6cc;padding:11px 13px;border-radius:9px;margin-bottom:14px;font-size:13.5px">${icon("check", 17)}<span>Summary copied to your clipboard.</span></div>
+    ${setup}
+    <label>TeamDynamix ticket number</label>
+    <input id="tdxNum" type="text" inputmode="numeric" placeholder="e.g. 1234567" onkeydown="if(event.key==='Enter'){event.preventDefault();openTdxTicket()}">
+    <div style="color:var(--text-2);font-size:13px;margin-top:12px">It opens in your browser, where you're already signed in. Paste the summary into the ticket's comment box and save.</div>`;
+  showModal("Send summary to TeamDynamix", body, [
+    { label: blab("x", "Cancel"), cls: "btn", action: closeModal },
+    { label: blab("external", "Open ticket"), cls: "btn approve safe", action: openTdxTicket },
+  ]);
+  setTimeout(() => { const f = document.getElementById(haveTmpl ? "tdxNum" : "tdxUrl"); if (f) f.focus(); }, 50);
+}
+
+async function openTdxTicket() {
+  let tmpl = tdxTemplate();
+  if (!tmpl) {
+    const urlEl = document.getElementById("tdxUrl");
+    tmpl = deriveTdxTemplate(urlEl ? urlEl.value : "");
+    if (!tmpl) { showToast(`${icon("alert", 16)} Paste a valid ticket address first (it must contain the ticket number)`, 4500); return; }
+    try { localStorage.setItem("tdxTicketUrl", tmpl); } catch (_) {}
+  }
+  const num = (document.getElementById("tdxNum").value || "").replace(/[^0-9]/g, "");
+  if (!num) { showToast(`${icon("alert", 16)} Enter the ticket number`, 3500); return; }
+  try { await navigator.clipboard.writeText(tdxText); } catch (_) {}
+  window.open(tmpl.replace("{ID}", num), "_blank", "noopener");
+  const paste = /Mac|iPhone|iPad/.test(navigator.userAgent) ? "⌘V" : "Ctrl+V";
+  showModal("Opened in TeamDynamix", `
+    <div style="display:flex;gap:9px;align-items:center;color:var(--ok);background:var(--ok-soft);border:1px solid #bfe6cc;padding:11px 13px;border-radius:9px;margin-bottom:14px;font-size:13.5px">${icon("check", 17)}<span>Ticket #${escapeHtml(num)} opened in your browser, and the summary is on your clipboard.</span></div>
+    <div style="color:var(--text-2);font-size:13.5px;line-height:1.6">Click into the ticket's <b>Comments</b>/update box and paste (<b>${paste}</b>), then save.<br><br>Address format wrong? <a href="#" onclick="resetTdxTemplate();return false" style="color:var(--primary);font-weight:600">Reset the TeamDynamix address</a> and try again.</div>`,
+    [{ label: blab("check", "Done"), cls: "btn approve safe", action: closeModal }]);
 }
 
 function applyGuided(s, dryArgs) {
