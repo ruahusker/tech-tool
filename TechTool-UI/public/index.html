@@ -54,6 +54,7 @@
   .content{flex:1;display:flex;flex-direction:column;min-width:0;height:100vh}
   .topbar{display:flex;align-items:center;gap:16px;padding:17px 28px;border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0}
   .topbar-titles{flex:1;min-width:0}
+  .topbar-actions{display:flex;gap:10px;align-items:center}
   .topbar h1{margin:0;font-size:18px;font-weight:700;letter-spacing:-.015em}
   .topbar p{margin:2px 0 0;font-size:13px;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   main{flex:1;overflow:hidden;display:flex;min-height:0}
@@ -266,7 +267,10 @@
   <div class="content">
     <header class="topbar">
       <div class="topbar-titles"><h1 id="secTitle">Guided Tools</h1><p id="secSub">Run a guided diagnostic or fix.</p></div>
-      <button id="ticketBtn" class="btn ticket" onclick="openTicket()"></button>
+      <div class="topbar-actions">
+        <button id="newSessionBtn" class="btn" onclick="confirmClearSession()"></button>
+        <button id="ticketBtn" class="btn ticket" onclick="openTicket()"></button>
+      </div>
     </header>
     <main>
       <div class="view active" id="guidedView"></div>
@@ -1049,6 +1053,31 @@ async function doUninstall() {
   showBye("Uninstalled from this computer", `${freed}Safe to close this tab and unplug the drive.`);
 }
 
+// ---------- clear / new session ----------
+function confirmClearSession() {
+  showModal("Start a new session?",
+    `<div class="modal-sub">Clears the current session so you can start fresh on the next computer:</div>
+     <ul style="margin:0 0 6px 18px;color:var(--text-2);font-size:13.5px;line-height:1.7">
+       <li>Resets the <b>Ticket Summary</b> and its activity count</li>
+       <li>Clears the <b>AI Assistant</b> conversation</li>
+     </ul>
+     <div style="color:var(--text-3);font-size:13px;margin-top:8px">Reports you've already saved to the USB drive are kept.</div>`,
+    [
+      { label: blab("x", "Cancel"), cls: "btn", action: closeModal },
+      { label: blab("refresh", "New Session"), cls: "btn approve safe", action: doClearSession },
+    ]);
+}
+async function doClearSession() {
+  try { await api("/api/reset", { session: SESSION }); } catch (_) {}
+  ticketText = "";
+  hideThinking();
+  setBusy(false);
+  updateTicketBadge(0);
+  document.getElementById("messages").innerHTML = chatEmptyHtml();
+  closeModal();
+  showToast(`${icon("check", 16, "tok")} New session started — ticket summary cleared`, 3500);
+}
+
 // ---------- wiring ----------
 document.querySelectorAll("[data-icon]").forEach((el) => { el.innerHTML = icon(el.dataset.icon, +(el.dataset.size || 18)); });
 document.querySelectorAll(".nav-item[data-view]").forEach((t) => { t.onclick = () => setView(t.dataset.view); });
@@ -1057,6 +1086,7 @@ const ci = document.getElementById("chatInput");
 ci.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat(); } });
 ci.addEventListener("input", () => { ci.style.height = "auto"; ci.style.height = Math.min(ci.scrollHeight, 140) + "px"; });
 document.getElementById("messages").innerHTML = chatEmptyHtml();
+document.getElementById("newSessionBtn").innerHTML = blab("refresh", "New Session");
 updateTicketBadge(0);
 
 statusTimer = setInterval(async () => { try { const s = await api("/api/status"); updateTicketBadge(s.activityCount || 0); } catch (_) {} }, 5000);

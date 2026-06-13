@@ -897,8 +897,9 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === "POST" && url.pathname === "/api/reset") {
       const { session: sid } = await readBody(req);
-      sessions.delete(sid || "default");
-      if ((sid || "default") === "default") activity.length = 0; // clearing the session also clears the log
+      if (sid) sessions.delete(sid);
+      activity.length = 0; // clearing the session resets the activity log (and thus the ticket summary)
+      log("Session cleared from UI — activity log reset.");
       return send(res, 200, { ok: true });
     }
     if (req.method === "POST" && url.pathname === "/api/exit") {
