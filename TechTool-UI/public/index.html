@@ -146,7 +146,7 @@
   #modal.show{display:flex;animation:fade .14s ease}
   .modal-box{background:var(--surface);border-radius:16px;width:560px;max-width:100%;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:var(--shadow-lg)}
   .mhead{padding:18px 22px;font-size:16px;font-weight:700;border-bottom:1px solid var(--border);flex-shrink:0;letter-spacing:-.01em}
-  .mbody{padding:20px 22px;font-size:14px;overflow-y:auto;flex:1 1 auto}
+  .mbody{padding:20px 22px;font-size:14px;overflow-y:auto;flex:1 1 auto;min-height:0}
   .mfoot{flex-shrink:0;padding:14px 22px;display:flex;gap:10px;justify-content:flex-end;border-top:1px solid var(--border);background:var(--surface-2)}
   .modal-sub{color:var(--text-2);margin-bottom:14px;font-size:13.5px;line-height:1.5}
   .reason{display:flex;gap:9px;align-items:flex-start;color:var(--warn);background:var(--warn-soft);border:1px solid #f0d9af;padding:11px 13px;border-radius:9px;margin-bottom:14px;font-size:13.5px;line-height:1.5}
@@ -188,6 +188,17 @@
   .an-sec.next-steps .an-list li::before{content:counter(step);position:absolute;left:9px;top:8px;width:21px;height:21px;border-radius:50%;background:var(--primary);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center}
   .toollink{display:inline-flex;align-items:center;gap:4px;cursor:pointer;color:var(--primary);background:var(--primary-soft);padding:1px 8px;border-radius:7px;font-weight:650;font-size:12.5px;white-space:nowrap}
   .toollink:hover{background:#dde4fd} .toollink .ic{width:12px;height:12px}
+
+  /* ---- follow-up Q&A ---- */
+  .followup{margin-top:16px;padding-top:16px;border-top:1px solid var(--border)}
+  .followup-thread{display:flex;flex-direction:column;gap:10px;margin-bottom:12px}
+  .followup-thread:empty{display:none}
+  .fq{align-self:flex-end;background:var(--primary);color:#fff;padding:8px 13px;border-radius:13px 13px 4px 13px;font-size:13.5px;max-width:85%;line-height:1.5}
+  .fa{align-self:flex-start;background:var(--surface-2);border:1px solid var(--border);padding:10px 13px;border-radius:13px 13px 13px 4px;font-size:13.5px;max-width:92%;line-height:1.55}
+  .fa .thinking{padding:0}
+  .followup-bar{display:flex;gap:9px}
+  .followup-bar input{flex:1;background:var(--surface);border:1px solid var(--border-2);border-radius:9px;padding:9px 12px;font-size:13.5px;font-family:inherit;color:var(--text)}
+  .followup-bar input:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft)}
 
   /* ---- large files ---- */
   .lf-controls{display:flex;align-items:center;gap:12px;margin-bottom:9px;font-size:13px;color:var(--text-2)}
@@ -526,10 +537,10 @@ async function runGuided(s) {
   showResult(`${scriptTitle(s)} — Result`, res.output || "(no output)", footer);
 }
 
-let curReport = { title: "", output: "", analysis: "" };
+let curReport = { title: "", output: "", analysis: "", followups: [] };
 function showResult(title, output, footerButtons) {
   const label = title.replace(/\s*—\s*Result$/, "").replace(/^Result:\s*/, "");
-  curReport = { title: label, output: output, analysis: "" };
+  curReport = { title: label, output: output, analysis: "", followups: [] };
   const body = `<pre class="out">${escapeHtml(output)}</pre><div id="analysisArea"></div>`;
   const footer = [
     { label: blab("sparkles", "Analyze with AI"), cls: "btn approve safe", action: () => runAnalysis(label, output) },
@@ -548,8 +559,42 @@ async function runAnalysis(title, output) {
   catch (e) { area.innerHTML = `<div class="result-block" style="color:var(--danger-600)">Analysis failed: ${escapeHtml(String(e))}</div>`; return; }
   if (data.error) { area.innerHTML = `<div class="result-block" style="color:var(--danger-600)">${escapeHtml(data.error)}</div>`; return; }
   curReport.analysis = data.analysis;
-  area.innerHTML = `<div class="result-block"><div class="result-label">${icon("sparkles", 14)} AI Analysis</div><div class="analysis">${renderAnalysis(data.analysis)}</div></div>`;
+  curReport.followups = [];
+  area.innerHTML = `<div class="result-block">
+      <div class="result-label">${icon("sparkles", 14)} AI Analysis</div>
+      <div class="analysis">${renderAnalysis(data.analysis)}</div>
+      <div class="followup">
+        <div class="result-label">${icon("chat", 14)} Ask a follow-up</div>
+        <div class="followup-thread" id="followThread"></div>
+        <div class="followup-bar">
+          <input id="followInput" type="text" placeholder="Ask about this report… e.g. is this drive failing?" onkeydown="if(event.key==='Enter'){event.preventDefault();askFollowup()}">
+          <button class="btn approve safe" onclick="askFollowup()">${blab("send", "Ask")}</button>
+        </div>
+      </div>
+    </div>`;
   area.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+function scrollFollow() { const b = document.querySelector("#modal .mbody"); if (b) b.scrollTop = b.scrollHeight; }
+async function askFollowup() {
+  const inp = document.getElementById("followInput");
+  if (!inp) return;
+  const q = inp.value.trim();
+  if (!q) return;
+  inp.value = "";
+  const thread = document.getElementById("followThread");
+  thread.insertAdjacentHTML("beforeend", `<div class="fq">${escapeHtml(q)}</div>`);
+  const aid = "fa" + Date.now();
+  thread.insertAdjacentHTML("beforeend", `<div class="fa" id="${aid}"><span class="thinking"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span></div>`);
+  scrollFollow();
+  let data;
+  try { data = await api("/api/followup", { title: curReport.title, output: curReport.output, analysis: curReport.analysis, question: q, history: curReport.followups }); }
+  catch (e) { document.getElementById(aid).innerHTML = `<span style="color:var(--danger-600)">Could not answer: ${escapeHtml(String(e))}</span>`; return; }
+  const el = document.getElementById(aid);
+  if (data.error) { el.innerHTML = `<span style="color:var(--danger-600)">${escapeHtml(data.error)}</span>`; return; }
+  el.innerHTML = `<div class="analysis">${formatInline(data.answer).replace(/\n/g, "<br>")}</div>`;
+  curReport.followups.push({ q, a: data.answer });
+  scrollFollow();
 }
 
 function openToolById(id) {
@@ -618,11 +663,12 @@ function renderAnalysis(text) {
 
 async function saveReport() {
   let data;
-  try { data = await api("/api/savereport", { title: curReport.title, output: curReport.output, analysis: curReport.analysis }); }
+  try { data = await api("/api/savereport", { title: curReport.title, output: curReport.output, analysis: curReport.analysis, followups: curReport.followups }); }
   catch (e) { showToast(`${icon("alert", 16)} Save failed: ${escapeHtml(String(e))}`, 4000); return; }
   if (data.error) { showToast(`${icon("alert", 16)} ${escapeHtml(data.error)}`, 4000); return; }
   const name = (data.file || "").split(/[\\/]/).pop();
-  showToast(`${icon("check", 16, "tok")} Saved to USB: Reports/${escapeHtml(name)}${curReport.analysis ? " (with AI analysis)" : ""}`, 4500);
+  const extras = [curReport.analysis ? "AI analysis" : "", (curReport.followups && curReport.followups.length) ? "Q&A" : ""].filter(Boolean).join(" + ");
+  showToast(`${icon("check", 16, "tok")} Saved to USB: Reports/${escapeHtml(name)}${extras ? " (with " + extras + ")" : ""}`, 4500);
 }
 
 // ---------- ticket summary ----------

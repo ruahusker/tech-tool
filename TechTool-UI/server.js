@@ -545,6 +545,37 @@ async function analyzeOutput(title, output, instruction) {
   return msg.content || "(no analysis returned)";
 }
 
+// Conversational follow-up Q&A grounded in a diagnostic report + its analysis.
+async function answerFollowup(title, output, analysis, history, question) {
+  const toolList = (catalog || []).map((s) => `- ${s.title || s.path.split("/").pop()}: ${s.summary}`).join("\n");
+  const sys = [
+    "You are an expert computer technician helping another technician understand a diagnostic report.",
+    "Answer the follow-up question directly and concisely in plain English (usually under 180 words; go longer only when truly needed).",
+    "Ground every answer ONLY in the report output and analysis provided, plus general technical knowledge. If a specific value isn't in the data, say so and suggest which tool would find it.",
+    "When a relevant Tech Tool tool exists, name it in double asterisks, e.g. **Disk Health**, so it becomes a clickable shortcut.",
+    "Do not invent values from the machine. Be practical and actionable.",
+    "",
+    "Available tools on this machine:",
+    toolList,
+  ].join("\n");
+  let text = String(output || "");
+  if (text.length > 12000) text = text.slice(0, 6000) + "\n...[output truncated]...\n" + text.slice(-6000);
+  const ctx = `Diagnostic tool: ${title || "(unknown)"}\n\n--- REPORT OUTPUT ---\n${text}\n--- END OUTPUT ---` +
+    (analysis && String(analysis).trim() ? `\n\n--- EARLIER AI ANALYSIS ---\n${String(analysis)}\n--- END ANALYSIS ---` : "");
+  const messages = [
+    { role: "system", content: sys },
+    { role: "user", content: ctx },
+    { role: "assistant", content: "I've reviewed the report. What would you like to know?" },
+  ];
+  for (const h of (Array.isArray(history) ? history : []).slice(-6)) {
+    if (h && h.q) messages.push({ role: "user", content: String(h.q) });
+    if (h && h.a) messages.push({ role: "assistant", content: String(h.a) });
+  }
+  messages.push({ role: "user", content: String(question) });
+  const msg = await llamaChat(messages, { noTools: true });
+  return msg.content || "(no answer returned)";
+}
+
 // Turn the session activity log into a closing ticket note.
 async function buildTicketSummary() {
   const fmtTimeShort = (iso) => { try { return new Date(iso).toLocaleTimeString(); } catch (_) { return iso; } };
@@ -692,8 +723,18 @@ const server = http.createServer(async (req, res) => {
       const analysis = await analyzeOutput(title, output, instruction);
       return send(res, 200, { analysis });
     }
+    if (req.method === "POST" && url.pathname === "/api/followup") {
+      if (!status.ready) return send(res, 503, { error: "AI engine not ready yet" });
+      const { title, output, analysis, question, history } = await readBody(req);
+      if (!question || !String(question).trim()) return send(res, 400, { error: "no question" });
+      if (!output || !String(output).trim()) return send(res, 400, { error: "no report to ask about" });
+      log(`followup: ${title || "(untitled)"} — "${String(question).slice(0, 120)}"`);
+      const answer = await answerFollowup(title, output, analysis, history, question);
+      logActivity({ kind: "ask", text: `(about ${title || "a report"}) ${String(question).slice(0, 240)}` });
+      return send(res, 200, { answer });
+    }
     if (req.method === "POST" && url.pathname === "/api/savereport") {
-      const { title, output, analysis } = await readBody(req);
+      const { title, output, analysis, followups } = await readBody(req);
       const dir = path.join(DRIVE_ROOT, "Reports");
       try { fs.mkdirSync(dir, { recursive: true }); } catch (_) {}
       const safe = String(title || "report").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "report";
@@ -707,6 +748,10 @@ const server = http.createServer(async (req, res) => {
         ``, `=== OUTPUT ===`, String(output || "(none)"),
       ];
       if (analysis && String(analysis).trim()) parts.push(``, `=== AI ANALYSIS ===`, String(analysis));
+      if (Array.isArray(followups) && followups.length) {
+        parts.push(``, `=== FOLLOW-UP Q&A ===`);
+        for (const f of followups) { if (f && f.q) parts.push(`Q: ${String(f.q)}`, `A: ${String(f.a || "")}`, ``); }
+      }
       try {
         fs.writeFileSync(file, parts.join("\n") + "\n");
         log(`saved report: ${file}`);
