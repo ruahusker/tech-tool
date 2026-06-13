@@ -621,6 +621,30 @@ function getMachineInfo() {
   return lines.join("\n");
 }
 
+// Native OS folder picker (no browser can return a real absolute path). Runs the dialog on
+// this machine and resolves with { path } / { cancelled } / { error }. Async so the server
+// stays responsive while the dialog is open.
+function pickFolder(promptText) {
+  const label = String(promptText || "Choose a folder").replace(/["'\r\n]/g, " ");
+  return new Promise((resolve) => {
+    let cmd, args;
+    if (IS_WIN) {
+      const ps = "Add-Type -AssemblyName System.Windows.Forms | Out-Null; $f = New-Object System.Windows.Forms.FolderBrowserDialog; $f.Description = '" + label + "'; $f.ShowNewFolderButton = $true; if ($f.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { [Console]::Out.Write($f.SelectedPath) }";
+      cmd = "powershell"; args = ["-NoProfile", "-STA", "-Command", ps];
+    } else {
+      const script = 'try\nset f to choose folder with prompt "' + label + '"\nPOSIX path of f\non error number -128\nreturn ""\nend try';
+      cmd = "osascript"; args = ["-e", script];
+    }
+    let out = "", p;
+    try { p = spawn(cmd, args, { stdio: ["ignore", "pipe", "ignore"] }); }
+    catch (e) { return resolve({ error: String(e.message || e) }); }
+    const timer = setTimeout(() => { try { p.kill(); } catch (_) {} }, 180000);
+    p.stdout.on("data", (d) => (out += d));
+    p.on("close", () => { clearTimeout(timer); const pth = out.trim(); resolve(pth ? { path: pth } : { cancelled: true }); });
+    p.on("error", (e) => { clearTimeout(timer); resolve({ error: String(e.message || e) }); });
+  });
+}
+
 // Turn the session activity log into a closing ticket note.
 async function buildTicketSummary() {
   const fmtTimeShort = (iso) => { try { return new Date(iso).toLocaleTimeString(); } catch (_) { return iso; } };
@@ -865,6 +889,11 @@ const server = http.createServer(async (req, res) => {
         ? await buildTicketSummary()
         : "ISSUE: No diagnostics have been run in this session yet.\nACTIONS TAKEN: None recorded.\nFINDINGS: None.\nRESOLUTION: None.\nFOLLOW-UP: Run a tool or two, then regenerate this summary.";
       return send(res, 200, { summary: `${header}\n${machine}\n${ai}` });
+    }
+    if (req.method === "POST" && url.pathname === "/api/pickfolder") {
+      const body = await readBody(req);
+      const r = await pickFolder(body.prompt);
+      return send(res, 200, r);
     }
     if (req.method === "POST" && url.pathname === "/api/reset") {
       const { session: sid } = await readBody(req);

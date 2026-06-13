@@ -168,6 +168,9 @@
   .modal-box input[type=text]:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft)}
   .argchk{display:flex;align-items:center;gap:9px;margin:9px 0;font-size:13.5px}
   input[type=checkbox]{accent-color:var(--primary);width:16px;height:16px}
+  .path-row{display:flex;gap:8px;align-items:center}
+  .path-row input{flex:1}
+  .path-browse{flex-shrink:0;padding:9px 13px}
 
   /* ---- analysis ---- */
   .result-block{margin-top:16px;padding-top:16px;border-top:1px solid var(--border)}
@@ -332,6 +335,7 @@ const ICONS = {
   lightbulb:'<path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1V17h6v-.2c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2z"/>',
   compass:'<circle cx="12" cy="12" r="10"/><path d="m16.2 7.8-2.9 6.4-6.4 2.9 2.9-6.4 6.4-2.9z"/>',
   power:'<path d="M12 2v10M18.36 6.64a9 9 0 1 1-12.73 0"/>',
+  folder:'<path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2z"/>',
   dot:'<circle cx="12" cy="12" r="4" fill="currentColor" stroke="none"/>',
 };
 function icon(name, size, cls){ const p = ICONS[name] || ICONS.dot; const s = size || 18; return `<svg class="ic${cls ? " " + cls : ""}" width="${s}" height="${s}" viewBox="0 0 24 24" aria-hidden="true">${p}</svg>`; }
@@ -505,7 +509,14 @@ function openScript(s) {
       if (isFlag) {
         form += `<div class="argchk"><input type="checkbox" id="arg_${a.name}" data-arg="${a.name}"><label for="arg_${a.name}" style="margin:0">${escapeHtml(a.name)}${a.desc ? " — " + escapeHtml(a.desc) : ""}</label></div>`;
       } else {
-        form += `<label>${escapeHtml(a.name)}${a.desc ? " — " + escapeHtml(a.desc) : ""}${a.default !== undefined ? " (default " + escapeHtml(String(a.default)) + ")" : ""}</label><input type="text" data-arg="${a.name}" data-valued="1" placeholder="${a.default !== undefined ? escapeHtml(String(a.default)) : ""}">`;
+        const lbl = `<label>${escapeHtml(a.name)}${a.desc ? " — " + escapeHtml(a.desc) : ""}${a.default !== undefined ? " (default " + escapeHtml(String(a.default)) + ")" : ""}</label>`;
+        const ph = a.default !== undefined ? escapeHtml(String(a.default)) : "";
+        if (isPathArg(a.name)) {
+          const pid = "pf_" + a.name.replace(/[^a-z0-9]/gi, "");
+          form += `${lbl}<div class="path-row"><input type="text" id="${pid}" data-arg="${a.name}" data-valued="1" placeholder="${ph}"><button type="button" class="btn path-browse" onclick="pickFolderInto('${pid}')">${blab("folder", "Browse")}</button></div>`;
+        } else {
+          form += `${lbl}<input type="text" data-arg="${a.name}" data-valued="1" placeholder="${ph}">`;
+        }
       }
     }
     form += `</div>`;
@@ -514,6 +525,23 @@ function openScript(s) {
     { label: blab("x", "Cancel"), cls: "btn", action: closeModal },
     { label: blab(s.destructive ? "eye" : "play", s.destructive ? "Preview" : "Run"), cls: "btn approve safe", action: () => runGuided(s) },
   ]);
+}
+
+// A valued arg that names a directory (so it gets a native "Browse…" folder picker).
+// Excludes file-output args, which expect a filename rather than a folder.
+function isPathArg(name) {
+  const n = String(name).toLowerCase();
+  if (n.includes("outfile") || n.includes("file")) return false;
+  return /dest|dir|folder|path/.test(n);
+}
+async function pickFolderInto(id) {
+  let data;
+  try { data = await api("/api/pickfolder", {}); }
+  catch (e) { showToast(`${icon("alert", 16)} Couldn't open the folder picker: ${escapeHtml(String(e))}`, 4000); return; }
+  if (data.error) { showToast(`${icon("alert", 16)} ${escapeHtml(data.error)}`, 4000); return; }
+  if (data.cancelled) return;
+  const el = document.getElementById(id);
+  if (el && data.path) el.value = data.path;
 }
 
 function collectArgs() {
@@ -853,7 +881,7 @@ function openLargeFiles() {
   const body = `
     <div class="modal-sub">Scan a folder for big files, then select any you want to delete.</div>
     <label>Folder to scan (blank = your home folder)</label>
-    <input id="lfPath" type="text" placeholder="(home folder)">
+    <div class="path-row"><input id="lfPath" type="text" placeholder="(home folder)"><button type="button" class="btn path-browse" onclick="pickFolderInto('lfPath')">${blab("folder", "Browse")}</button></div>
     <label>Minimum size (MB)</label>
     <input id="lfMin" type="text" value="200" style="width:120px;display:block">
     <div id="lfResult" style="margin-top:16px"></div>`;
