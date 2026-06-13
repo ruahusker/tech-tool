@@ -598,7 +598,7 @@ function gb(bytes, dp) { const v = bytes / 1073741824; return dp === 0 ? String(
 
 function getMachineInfo() {
   let osLine = `${PLATFORM === "windows" ? "Windows" : "macOS"} (${process.platform} ${os.release()})`; // fallback
-  let model = "", serial = "", memUsed = null, disk = null, apps = null;
+  let model = "", serial = "", memUsed = null, disk = null;
   try {
     if (PLATFORM === "windows") {
       const ps = "$o=Get-CimInstance Win32_OperatingSystem;$c=Get-CimInstance Win32_ComputerSystem;$b=Get-CimInstance Win32_BIOS;$d=Get-CimInstance Win32_LogicalDisk -Filter \"DeviceID='C:'\";$a=@(Get-ItemProperty 'HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*','HKLM:\\Software\\Wow6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*' -ErrorAction SilentlyContinue|Where-Object {$_.DisplayName}).Count;'OS='+$o.Caption+' '+$o.Version;'Model='+$c.Manufacturer+' '+$c.Model;'Serial='+$b.SerialNumber;'MemTotalKB='+$o.TotalVisibleMemorySize;'MemFreeKB='+$o.FreePhysicalMemory;'DiskTotal='+$d.Size;'DiskFree='+$d.FreeSpace;'Apps='+$a";
@@ -610,7 +610,6 @@ function getMachineInfo() {
       if (mt && mf) memUsed = (mt - mf) * 1024;
       const dt = parseInt(g(/DiskTotal=(\d+)/), 10), dfr = parseInt(g(/DiskFree=(\d+)/), 10);
       if (dt) disk = { total: dt, used: dt - dfr, free: dfr };
-      const ac = parseInt(g(/Apps=(\d+)/), 10); if (!isNaN(ac)) apps = ac;
     } else {
       const ver = probe("sw_vers", ["-productVersion"], 2000);
       const build = probe("sw_vers", ["-buildVersion"], 2000);
@@ -631,7 +630,6 @@ function getMachineInfo() {
         const tKB = parseInt(row[1], 10), aKB = parseInt(row[3], 10);
         disk = { total: tKB * 1024, used: (tKB - aKB) * 1024, free: aKB * 1024 };
       }
-      try { apps = fs.readdirSync("/Applications").filter((f) => f.endsWith(".app")).length; } catch (_) {}
     }
   } catch (_) {}
 
@@ -644,10 +642,28 @@ function getMachineInfo() {
   if (cpu) L.push(`- CPU: ${cpu.trim()} (${os.cpus().length} logical cores)`);
   L.push(`- Memory: ${gb(os.totalmem(), 0)} GB total${memUsed ? ` (${gb(memUsed)} GB in use)` : ""}`);
   if (disk && disk.total) L.push(`- Storage: ${gb(disk.total, 0)} GB total, ${gb(disk.used)} GB used (${gb(disk.free)} GB free)`);
-  if (apps !== null && !isNaN(apps)) L.push(`- Applications installed: ${apps}`);
   L.push(`- Uptime: ${fmtUptime(os.uptime())}`);
   try { L.push(`- Signed-in user: ${os.userInfo().username}`); } catch (_) {}
   return L.join("\n");
+}
+
+// Full installed-application list for the ticket. macOS: app bundle names in /Applications
+// (+ Utilities). Windows: registry Uninstall display names + versions (NOT Win32_Product,
+// which is slow and can trigger MSI repairs). Returns "N total:\n<comma list>" or "".
+function getInstalledApps() {
+  try {
+    if (PLATFORM === "windows") {
+      const ps = "@(Get-ItemProperty 'HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*','HKLM:\\Software\\Wow6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*' -ErrorAction SilentlyContinue | Where-Object {$_.DisplayName} | ForEach-Object { if ($_.DisplayVersion) { $_.DisplayName+' '+$_.DisplayVersion } else { [string]$_.DisplayName } }) | Sort-Object -Unique";
+      const out = probe("powershell", ["-NoProfile", "-Command", ps], 8000);
+      const list = out.split("\n").map((s) => s.trim()).filter(Boolean);
+      return list.length ? `${list.length} total:\n${list.join(", ")}` : "";
+    }
+    let names = [];
+    try { names = fs.readdirSync("/Applications").filter((f) => f.endsWith(".app")).map((f) => f.replace(/\.app$/, "")); } catch (_) {}
+    try { names = names.concat(fs.readdirSync("/Applications/Utilities").filter((f) => f.endsWith(".app")).map((f) => f.replace(/\.app$/, "") + " (Utilities)")); } catch (_) {}
+    names.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+    return names.length ? `${names.length} total:\n${names.join(", ")}` : "";
+  } catch (_) { return ""; }
 }
 
 // Native OS folder picker (no browser can return a real absolute path). Runs the dialog on
@@ -914,10 +930,12 @@ const server = http.createServer(async (req, res) => {
       if (!status.ready) return send(res, 503, { error: "AI engine not ready yet" });
       const header = `AUTO-GENERATED SUMMARY: Produced automatically by Tech Tool from the diagnostic session below — please review before relying on it. Generated ${new Date().toLocaleString()}.`;
       const machine = `CLIENT COMPUTER:\n${getMachineInfo()}`;
+      const appsStr = getInstalledApps();
+      const appsSection = appsStr ? `INSTALLED APPLICATIONS:\n${appsStr}\n` : "";
       const ai = activity.length
         ? await buildTicketSummary()
         : "ISSUE: No diagnostics have been run in this session yet.\nACTIONS TAKEN: None recorded.\nFINDINGS: None.\nRESOLUTION: None.\nFOLLOW-UP: Run a tool or two, then regenerate this summary.";
-      return send(res, 200, { summary: `${header}\n${machine}\n${ai}` });
+      return send(res, 200, { summary: `${header}\n${machine}\n${appsSection}${ai}` });
     }
     if (req.method === "POST" && url.pathname === "/api/pickfolder") {
       const body = await readBody(req);
