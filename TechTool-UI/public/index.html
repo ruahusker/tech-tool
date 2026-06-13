@@ -44,6 +44,11 @@
   .engine.ready .edot{background:var(--ok);box-shadow:0 0 0 3px var(--ok-soft)}
   .engine.err .edot{background:var(--danger);box-shadow:0 0 0 3px var(--danger-soft)}
   .machine{font-size:11.5px;color:var(--text-3);margin-top:7px;line-height:1.6}
+  .foot-actions{display:flex;gap:8px;margin-top:12px}
+  .foot-btn{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:8px 10px;border:1px solid var(--border);background:var(--surface);color:var(--text-2);font:inherit;font-size:12.5px;font-weight:600;border-radius:8px;cursor:pointer;transition:background .12s,color .12s,border-color .12s}
+  .foot-btn .ic{width:15px;height:15px}
+  .foot-btn:hover{background:var(--surface-2);color:var(--text);border-color:var(--border-2)}
+  .foot-btn.danger:hover{background:var(--danger-soft);color:var(--danger-600);border-color:#f3c0c0}
 
   /* ---- content ---- */
   .content{flex:1;display:flex;flex-direction:column;min-width:0;height:100vh}
@@ -200,6 +205,13 @@
   #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
   #toast .ic{width:17px;height:17px} #toast .tok{color:#4ade80}
 
+  /* ---- shutdown / uninstall overlay ---- */
+  #bye{position:fixed;inset:0;z-index:80;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;padding:24px}
+  #bye.hidden{display:none}
+  .bye-ico{width:62px;height:62px;border-radius:16px;background:var(--ok-soft);color:var(--ok);display:flex;align-items:center;justify-content:center}
+  #byeTitle{font-size:19px;font-weight:700}
+  #byeDetail{color:var(--text-2);font-size:13.5px;max-width:440px;line-height:1.55}
+
   ::-webkit-scrollbar{width:11px;height:11px}
   ::-webkit-scrollbar-thumb{background:#c8cfd9;border-radius:7px;border:3px solid transparent;background-clip:padding-box}
   ::-webkit-scrollbar-thumb:hover{background:#aeb7c4}
@@ -230,6 +242,10 @@
     <div class="sidebar-foot">
       <div class="engine"><span class="edot"></span><span id="engineState">Starting…</span></div>
       <div class="machine" id="machineInfo"></div>
+      <div class="foot-actions">
+        <button class="foot-btn" onclick="confirmExit()"><span data-icon="power" data-size="15"></span><span>Exit</span></button>
+        <button class="foot-btn danger" onclick="confirmUninstall()"><span data-icon="trash" data-size="15"></span><span>Uninstall</span></button>
+      </div>
     </div>
   </aside>
 
@@ -252,6 +268,11 @@
 </div>
 
 <div id="toast"></div>
+<div id="bye" class="hidden">
+  <div class="bye-ico" id="byeIco"></div>
+  <div id="byeTitle"></div>
+  <div id="byeDetail"></div>
+</div>
 <div id="modal"><div class="modal-box">
   <div class="mhead" id="modalHead"></div>
   <div class="mbody" id="modalBody"></div>
@@ -299,6 +320,7 @@ const ICONS = {
   external:'<path d="M15 3h6v6M10 14 21 3M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"/>',
   lightbulb:'<path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1V17h6v-.2c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2z"/>',
   compass:'<circle cx="12" cy="12" r="10"/><path d="m16.2 7.8-2.9 6.4-6.4 2.9 2.9-6.4 6.4-2.9z"/>',
+  power:'<path d="M12 2v10M18.36 6.64a9 9 0 1 1-12.73 0"/>',
   dot:'<circle cx="12" cy="12" r="4" fill="currentColor" stroke="none"/>',
 };
 function icon(name, size, cls){ const p = ICONS[name] || ICONS.dot; const s = size || 18; return `<svg class="ic${cls ? " " + cls : ""}" width="${s}" height="${s}" viewBox="0 0 24 24" aria-hidden="true">${p}</svg>`; }
@@ -856,6 +878,49 @@ function updateTicketBadge(n) {
   btn.innerHTML = `${icon("clipboard", 16)}<span>Ticket Summary</span>` + (n > 0 ? ` <span class="tcount">${n}</span>` : "");
 }
 
+// ---------- exit / uninstall ----------
+let statusTimer = null;
+function showBye(title, detail) {
+  if (statusTimer) clearInterval(statusTimer);
+  document.getElementById("byeIco").innerHTML = icon("checkc", 30);
+  document.getElementById("byeTitle").textContent = title;
+  document.getElementById("byeDetail").textContent = detail;
+  document.getElementById("bye").classList.remove("hidden");
+}
+function confirmExit() {
+  showModal("Exit Tech Tool?",
+    `<div class="modal-sub">This stops the local Tech Tool service and AI engine. You can then close this tab and unplug the drive.</div>
+     <div style="color:var(--text-2);font-size:13px">The AI model copied to this computer stays put so the next launch is fast. To remove it too, use <b>Uninstall</b> instead.</div>`,
+    [
+      { label: blab("x", "Cancel"), cls: "btn", action: closeModal },
+      { label: blab("power", "Exit"), cls: "btn approve safe", action: doExit },
+    ]);
+}
+async function doExit() {
+  showModal("Shutting down…", `<div class="spinner" style="width:26px;height:26px;border-width:3px"></div>`, []);
+  try { await api("/api/exit", {}); } catch (_) {}
+  closeModal();
+  showBye("Tech Tool has shut down", "You can close this browser tab and unplug the drive.");
+}
+function confirmUninstall() {
+  showModal("Uninstall from this computer?",
+    `<div class="reason bad">${icon("alert", 17)}<span>This removes the Tech Tool AI model and engine that were copied to THIS computer (in your home folder). The USB drive itself is not touched.</span></div>
+     <div class="modal-sub">After removing, Tech Tool will close. Next time you plug the drive into a machine it re-copies what it needs.</div>`,
+    [
+      { label: blab("x", "Cancel"), cls: "btn", action: closeModal },
+      { label: blab("trash", "Uninstall"), cls: "btn approve", action: doUninstall },
+    ]);
+}
+async function doUninstall() {
+  showModal("Removing local files…", `<div style="display:flex;align-items:center;gap:12px"><div class="spinner" style="width:26px;height:26px;border-width:3px"></div><span style="color:var(--text-2)">Removing the AI model and engine from this computer…</span></div>`, []);
+  let data;
+  try { data = await api("/api/uninstall", {}); } catch (_) { data = { ok: true }; }
+  closeModal();
+  if (data && data.error) { showToast(`${icon("alert", 16)} ${escapeHtml(data.error)}`, 5000); return; }
+  const freed = data && data.freedMB ? `Removed ${data.freedMB.toLocaleString()} MB from this computer. ` : "";
+  showBye("Uninstalled from this computer", `${freed}Safe to close this tab and unplug the drive.`);
+}
+
 // ---------- wiring ----------
 document.querySelectorAll("[data-icon]").forEach((el) => { el.innerHTML = icon(el.dataset.icon, +(el.dataset.size || 18)); });
 document.querySelectorAll(".nav-item[data-view]").forEach((t) => { t.onclick = () => setView(t.dataset.view); });
@@ -866,7 +931,7 @@ ci.addEventListener("input", () => { ci.style.height = "auto"; ci.style.height =
 document.getElementById("messages").innerHTML = chatEmptyHtml();
 updateTicketBadge(0);
 
-setInterval(async () => { try { const s = await api("/api/status"); updateTicketBadge(s.activityCount || 0); } catch (_) {} }, 5000);
+statusTimer = setInterval(async () => { try { const s = await api("/api/status"); updateTicketBadge(s.activityCount || 0); } catch (_) {} }, 5000);
 
 pollSetup();
 buildGuided();

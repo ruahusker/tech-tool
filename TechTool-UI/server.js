@@ -158,6 +158,24 @@ function findAsset(dir, regex) {
   return hit ? path.join(dir, hit) : null;
 }
 
+// Recursively total the byte size of a directory (used to report freed space on uninstall).
+function dirSize(dir) {
+  let total = 0;
+  const walk = (d) => {
+    let entries;
+    try { entries = fs.readdirSync(d, { withFileTypes: true }); } catch (_) { return; }
+    for (const e of entries) {
+      const p = path.join(d, e.name);
+      try {
+        if (e.isDirectory()) walk(p);
+        else { const st = fs.lstatSync(p); if (st.isFile()) total += st.size; }
+      } catch (_) {}
+    }
+  };
+  walk(dir);
+  return total;
+}
+
 function findServerBinary(root) {
   // Depth-first search for the server binary; the archive nests it in a
   // versioned subfolder (e.g. llama-b9585/).
@@ -760,6 +778,36 @@ const server = http.createServer(async (req, res) => {
       sessions.delete(sid || "default");
       if ((sid || "default") === "default") activity.length = 0; // clearing the session also clears the log
       return send(res, 200, { ok: true });
+    }
+    if (req.method === "POST" && url.pathname === "/api/exit") {
+      log("Exit requested from UI — stopping the AI engine and shutting down.");
+      send(res, 200, { ok: true });
+      // Respond first, then stop llama-server and exit (mirrors the SIGINT handler).
+      setTimeout(() => { try { if (llamaProc) llamaProc.kill(); } catch (_) {} process.exit(0); }, 350);
+      return;
+    }
+    if (req.method === "POST" && url.pathname === "/api/uninstall") {
+      log("Uninstall requested from UI — removing local install: " + INSTALL_DIR);
+      try { if (llamaProc) llamaProc.kill(); } catch (_) {}
+      llamaProc = null; status.ready = false;
+      // Give llama-server a moment to release the model file (matters on Windows, where
+      // deleting a file held open by a running process fails).
+      await new Promise((r) => setTimeout(r, 700));
+      let freedMB = 0;
+      try { if (fs.existsSync(INSTALL_DIR)) freedMB = Math.round(dirSize(INSTALL_DIR) / 1048576); } catch (_) {}
+      let lastErr = null;
+      for (let i = 0; i < 3; i++) {
+        try { fs.rmSync(INSTALL_DIR, { recursive: true, force: true, maxRetries: 3, retryDelay: 300 }); lastErr = null; break; }
+        catch (e) { lastErr = e; await new Promise((r) => setTimeout(r, 500)); }
+      }
+      if (lastErr) return send(res, 500, { error: "Could not remove local files: " + lastErr.message });
+      // Remove the parent ~/.tech-utility too if nothing else lives there.
+      try { const parent = path.dirname(INSTALL_DIR); if (fs.existsSync(parent) && fs.readdirSync(parent).length === 0) fs.rmdirSync(parent); } catch (_) {}
+      log(`Uninstall complete — removed ${freedMB} MB from ${INSTALL_DIR}`);
+      send(res, 200, { ok: true, path: INSTALL_DIR, freedMB });
+      // The engine is gone; this server can no longer function. Exit so the tech can unplug.
+      setTimeout(() => process.exit(0), 1200);
+      return;
     }
     send(res, 404, { error: "not found" });
   } catch (e) {
