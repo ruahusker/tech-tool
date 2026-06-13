@@ -27,8 +27,19 @@ const DRIVE_ROOT = path.dirname(UI_DIR);
 const AGENT_DIR = path.join(DRIVE_ROOT, "Qwen Coder Tech Agent");
 const TECHKIT_DIR = path.join(DRIVE_ROOT, "TechKit");
 const INSTALL_DIR = path.join(os.homedir(), ".tech-utility", "qwen-coder-tech-agent");
-const MODEL_FILE = "qwen3-4b-instruct-2507-q4_k_m.gguf";
-const TEMPLATE_FILE = "Qwen3-4B-Instruct-2507.jinja";
+// Model registry — choose with TECHTOOL_MODEL (default: qwen). Granite 4.0 H-Tiny is a
+// Mixture-of-Experts model (7B total, ~1B active per token), aimed at slow CPU-only
+// machines: it reads far fewer params per token so it generates noticeably faster, and
+// its hybrid-Mamba layers keep the KV cache small. It carries its own tool-calling chat
+// template inside the GGUF, so it uses --jinja with no external template file.
+const MODELS = {
+  qwen: { file: "qwen3-4b-instruct-2507-q4_k_m.gguf", template: "Qwen3-4B-Instruct-2507.jinja", label: "AI model (2.5 GB)" },
+  granite: { file: "granite-4.0-h-tiny-q4_k_m.gguf", template: null, label: "AI model (4 GB)" },
+};
+const MODEL_KEY = (process.env.TECHTOOL_MODEL || "qwen").toLowerCase();
+const MODEL = MODELS[MODEL_KEY] || MODELS.qwen;
+const MODEL_FILE = MODEL.file;
+const TEMPLATE_FILE = MODEL.template;
 const IS_WIN = process.platform === "win32";
 const PLATFORM = IS_WIN ? "windows" : "macos";
 const UI_PORT = 8765;
@@ -227,17 +238,21 @@ async function startLlama() {
   }
   const bin = extractLlama();
   const model = path.join(INSTALL_DIR, "models", MODEL_FILE);
-  const template = path.join(INSTALL_DIR, "templates", TEMPLATE_FILE);
-  copyIfNeeded(path.join(AGENT_DIR, "models", MODEL_FILE), model, "AI model (2.5 GB)");
-  copyIfNeeded(path.join(AGENT_DIR, "assets", "templates", TEMPLATE_FILE), template, "chat template");
+  copyIfNeeded(path.join(AGENT_DIR, "models", MODEL_FILE), model, MODEL.label);
 
   status.detail = "Starting local AI engine...";
   log(status.detail);
   const ctx = process.env.QWEN_CONTEXT_SIZE || "32768";
   const args = ["-m", model, "--host", "127.0.0.1", "--port", String(LLAMA_PORT),
     "--alias", EXPECTED_MODEL_ID, "-c", ctx, "--parallel", "1",
-    "--jinja", "--chat-template-file", template, "--reasoning", "off",
+    "--jinja", "--reasoning", "off",
     "--cache-reuse", "256", "-fa", "on", "--cache-type-k", "q8_0", "--cache-type-v", "q8_0"];
+  // Qwen uses an external tool-call template; Granite carries its own inside the GGUF.
+  if (TEMPLATE_FILE) {
+    const template = path.join(INSTALL_DIR, "templates", TEMPLATE_FILE);
+    copyIfNeeded(path.join(AGENT_DIR, "assets", "templates", TEMPLATE_FILE), template, "chat template");
+    args.push("--chat-template-file", template);
+  }
   if (!IS_WIN && process.arch === "arm64") args.push("-ngl", "999");
   if (IS_WIN) {
     const cores = physicalCores();

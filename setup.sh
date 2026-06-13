@@ -46,6 +46,9 @@ echo ""
 echo "== AI models =="
 fetch "https://huggingface.co/lmstudio-community/Qwen3-4B-Instruct-2507-GGUF/resolve/main/Qwen3-4B-Instruct-2507-Q4_K_M.gguf" \
       "$AGENT/models/qwen3-4b-instruct-2507-q4_k_m.gguf"
+# Granite 4.0 H-Tiny — faster MoE alternative for slow CPU machines (TECHTOOL_MODEL=granite).
+fetch "https://huggingface.co/bartowski/ibm-granite_granite-4.0-h-tiny-GGUF/resolve/main/ibm-granite_granite-4.0-h-tiny-Q4_K_M.gguf" \
+      "$AGENT/models/granite-4.0-h-tiny-q4_k_m.gguf"
 if [ "$WANT_DRAFT" = "1" ]; then
   fetch "https://huggingface.co/lmstudio-community/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q8_0.gguf" \
         "$AGENT/models/qwen3-0.6b-q8_0.gguf"
