@@ -631,11 +631,12 @@ const SECTION_META = {
   "LIKELY CAUSE": { icon: "compass", cls: "" }, "NEXT STEPS": { icon: "lightbulb", cls: "next-steps" },
   "ISSUE": { icon: "clipboard", cls: "" }, "ACTIONS TAKEN": { icon: "wrench", cls: "" },
   "RESOLUTION": { icon: "checkc", cls: "" }, "FOLLOW-UP": { icon: "lightbulb", cls: "next-steps" },
+  "AUTO-GENERATED SUMMARY": { icon: "sparkles", cls: "" }, "CLIENT COMPUTER": { icon: "cpu", cls: "" },
 };
 function renderAnalysis(text) {
   const lines = String(text).split("\n");
   const secs = []; let cur = { head: null, lines: [] };
-  const hdr = /^\s*(?:\d+\.\s*)?(SUMMARY|FINDINGS|LIKELY CAUSE|NEXT STEPS|ISSUE|ACTIONS TAKEN|RESOLUTION|FOLLOW-?UP)\b\s*[:\-–]?\s*(.*)$/i;
+  const hdr = /^\s*(?:\d+\.\s*)?(AUTO-GENERATED SUMMARY|CLIENT COMPUTER|SUMMARY|FINDINGS|LIKELY CAUSE|NEXT STEPS|ISSUE|ACTIONS TAKEN|RESOLUTION|FOLLOW-?UP)\b\s*[:\-–]?\s*(.*)$/i;
   for (const line of lines) {
     const m = line.match(hdr);
     if (m) { if (cur.head || cur.lines.some((l) => l.trim())) secs.push(cur); cur = { head: m[1].toUpperCase(), lines: m[2].trim() ? [m[2]] : [] }; }

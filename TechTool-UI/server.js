@@ -576,6 +576,51 @@ async function answerFollowup(title, output, analysis, history, question) {
   return msg.content || "(no answer returned)";
 }
 
+function fmtUptime(sec) {
+  const d = Math.floor(sec / 86400), h = Math.floor((sec % 86400) / 3600), m = Math.floor((sec % 3600) / 60);
+  const p = [];
+  if (d) p.push(d + "d");
+  if (h) p.push(h + "h");
+  p.push(m + "m");
+  return p.join(" ");
+}
+// Run a short command for a single fact; returns "" on any failure/timeout (best-effort).
+function probe(cmd, args, ms) {
+  try {
+    const r = spawnSync(cmd, args, { timeout: ms || 3000, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+    if (r && r.status === 0 && r.stdout) return r.stdout.trim();
+  } catch (_) {}
+  return "";
+}
+// Pertinent client-computer details for a ticket. Fast os-module facts always; model/serial
+// are best-effort and silently omitted if the probe fails or times out.
+function getMachineInfo() {
+  const lines = [];
+  lines.push(`- Hostname: ${os.hostname()}`);
+  lines.push(`- OS: ${PLATFORM === "windows" ? "Windows" : "macOS"} (${process.platform} ${os.release()})`);
+  const cpu = (os.cpus()[0] || {}).model;
+  if (cpu) lines.push(`- CPU: ${cpu.trim()} (${os.cpus().length} logical cores)`);
+  lines.push(`- Memory: ${Math.round(os.totalmem() / 1073741824)} GB`);
+  lines.push(`- Uptime: ${fmtUptime(os.uptime())}`);
+  try { lines.push(`- Signed-in user: ${os.userInfo().username}`); } catch (_) {}
+  try {
+    if (PLATFORM === "windows") {
+      const out = probe("powershell", ["-NoProfile", "-Command", "$c=Get-CimInstance Win32_ComputerSystem; $b=Get-CimInstance Win32_BIOS; 'Model='+$c.Manufacturer+' '+$c.Model; 'Serial='+$b.SerialNumber"], 4000);
+      const mm = (out.match(/Model=(.+)/) || [])[1];
+      const ss = (out.match(/Serial=(.+)/) || [])[1];
+      if (mm && mm.trim()) lines.push(`- Model: ${mm.trim()}`);
+      if (ss && ss.trim() && !/to be filled|default string/i.test(ss)) lines.push(`- Serial: ${ss.trim()}`);
+    } else {
+      const sp = probe("system_profiler", ["SPHardwareDataType"], 4000);
+      const model = (sp.match(/Model Name:\s*(.+)/) || [])[1] || (sp.match(/Model Identifier:\s*(.+)/) || [])[1];
+      const ser = (sp.match(/Serial Number \(system\):\s*(.+)/) || [])[1];
+      if (model) lines.push(`- Model: ${model.trim()}`);
+      if (ser) lines.push(`- Serial: ${ser.trim()}`);
+    }
+  } catch (_) {}
+  return lines.join("\n");
+}
+
 // Turn the session activity log into a closing ticket note.
 async function buildTicketSummary() {
   const fmtTimeShort = (iso) => { try { return new Date(iso).toLocaleTimeString(); } catch (_) { return iso; } };
@@ -814,9 +859,12 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === "POST" && url.pathname === "/api/ticket") {
       if (!status.ready) return send(res, 503, { error: "AI engine not ready yet" });
-      if (!activity.length) return send(res, 200, { summary: "No activity recorded this session yet. Run a tool or two, then generate a summary." });
-      const summary = await buildTicketSummary();
-      return send(res, 200, { summary });
+      const header = `AUTO-GENERATED SUMMARY: Produced automatically by Tech Tool from the diagnostic session below — please review before relying on it. Generated ${new Date().toLocaleString()}.`;
+      const machine = `CLIENT COMPUTER:\n${getMachineInfo()}`;
+      const ai = activity.length
+        ? await buildTicketSummary()
+        : "ISSUE: No diagnostics have been run in this session yet.\nACTIONS TAKEN: None recorded.\nFINDINGS: None.\nRESOLUTION: None.\nFOLLOW-UP: Run a tool or two, then regenerate this summary.";
+      return send(res, 200, { summary: `${header}\n${machine}\n${ai}` });
     }
     if (req.method === "POST" && url.pathname === "/api/reset") {
       const { session: sid } = await readBody(req);
