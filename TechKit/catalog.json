@@ -1304,6 +1304,471 @@
           "desc": "skip the Wi-Fi power toggle"
         }
       ]
+    },
+    {
+      "id": "win-encryption-status",
+      "path": "windows/Get-EncryptionStatus.ps1",
+      "platform": "windows",
+      "category": "security",
+      "summary": "BitLocker status for every volume, key protectors, and the recovery password + key ID (elevated). Reports TPM readiness.",
+      "use_when": [
+        "before a reimage or board swap",
+        "user locked out / needs recovery key",
+        "is the disk encrypted",
+        "encryption compliance check"
+      ],
+      "admin": "optional (recovery passwords need it)",
+      "destructive": false,
+      "runtime_seconds": 15,
+      "args": [
+        {
+          "name": "-OutFile",
+          "required": false,
+          "desc": "also save the report (incl. recovery key) to a file"
+        }
+      ],
+      "title": "Encryption & Recovery Key"
+    },
+    {
+      "id": "mac-encryption-status",
+      "path": "macos/encryption_status.sh",
+      "platform": "macos",
+      "category": "security",
+      "summary": "FileVault status, enabled unlock users, recovery-key posture (personal/institutional), and APFS volume encryption.",
+      "use_when": [
+        "is FileVault on",
+        "before wiping a Mac",
+        "who can unlock the disk",
+        "encryption compliance check"
+      ],
+      "admin": "optional (sudo for keys/users)",
+      "destructive": false,
+      "runtime_seconds": 15,
+      "args": [],
+      "title": "Encryption & Recovery Key"
+    },
+    {
+      "id": "win-repair-spooler",
+      "path": "windows/Repair-PrintSpooler.ps1",
+      "platform": "windows",
+      "category": "printing",
+      "summary": "Stop the spooler, clear stuck jobs in spool\\PRINTERS, and restart it. Dry-run unless -Force; -RestartOnly keeps jobs.",
+      "use_when": [
+        "print job stuck",
+        "spooler keeps crashing",
+        "printer offline",
+        "can't add a printer"
+      ],
+      "admin": true,
+      "destructive": true,
+      "dry_run_default": true,
+      "runtime_seconds": 10,
+      "args": [
+        {
+          "name": "-Force",
+          "required": false,
+          "desc": "apply; dry-run default"
+        },
+        {
+          "name": "-RestartOnly",
+          "required": false,
+          "desc": "just restart, keep queued jobs"
+        }
+      ],
+      "title": "Reset Print Spooler"
+    },
+    {
+      "id": "mac-reset-printing",
+      "path": "macos/reset_printing.sh",
+      "platform": "macos",
+      "category": "printing",
+      "summary": "Clear stuck print jobs and restart CUPS. Dry-run unless --force; --remove-printers does the full reset.",
+      "use_when": [
+        "print job stuck",
+        "can't print",
+        "printer offline",
+        "reset printing system"
+      ],
+      "admin": true,
+      "destructive": true,
+      "dry_run_default": true,
+      "runtime_seconds": 10,
+      "args": [
+        {
+          "name": "--force",
+          "required": false,
+          "desc": "apply (sudo); dry-run default"
+        },
+        {
+          "name": "--remove-printers",
+          "required": false,
+          "desc": "also remove all printers (full reset)"
+        }
+      ],
+      "title": "Reset Printing System"
+    },
+    {
+      "id": "win-domain-health",
+      "path": "windows/Get-DomainHealth.ps1",
+      "platform": "windows",
+      "category": "network",
+      "summary": "AD secure channel, domain controller, Kerberos tickets, time sync, and applied GPOs. -Repair forces gpupdate + time resync.",
+      "use_when": [
+        "can't log in to a domain account",
+        "GPO or mapped drives not applying",
+        "computer fell off the domain",
+        "kerberos or time errors"
+      ],
+      "admin": "optional (elevation gives more)",
+      "destructive": false,
+      "runtime_seconds": 20,
+      "args": [
+        {
+          "name": "-Repair",
+          "required": false,
+          "desc": "force gpupdate /force + w32tm resync"
+        }
+      ],
+      "title": "Domain & Group Policy"
+    },
+    {
+      "id": "mac-domain-health",
+      "path": "macos/domain_health.sh",
+      "platform": "macos",
+      "category": "network",
+      "summary": "AD binding, Kerberos tickets, and time sync (clock skew breaks SSO). --repair renews Kerberos and resyncs time.",
+      "use_when": [
+        "enterprise SSO / AD login fails",
+        "is this Mac AD-bound",
+        "kerberos errors",
+        "clock looks wrong"
+      ],
+      "admin": "optional (sudo for resync)",
+      "destructive": false,
+      "runtime_seconds": 15,
+      "args": [
+        {
+          "name": "--repair",
+          "required": false,
+          "desc": "renew Kerberos + resync time (sudo)"
+        }
+      ],
+      "title": "Domain & Directory"
+    },
+    {
+      "id": "win-wifi-diagnostics",
+      "path": "windows/Get-WifiDiagnostics.ps1",
+      "platform": "windows",
+      "category": "network",
+      "summary": "Live link quality (signal, channel, band, BSSID, rates), adapter driver, and saved profiles. -Report saves the full WLAN report.",
+      "use_when": [
+        "wifi slow or dropping",
+        "weak signal",
+        "won't connect to wifi",
+        "roaming problems"
+      ],
+      "admin": "optional (-ShowKey/-Report need it)",
+      "destructive": false,
+      "runtime_seconds": 10,
+      "args": [
+        {
+          "name": "-Report",
+          "required": false,
+          "desc": "save full WLAN report (HTML) to collections"
+        },
+        {
+          "name": "-ShowKey",
+          "required": false,
+          "desc": "reveal saved Wi-Fi password (admin)"
+        }
+      ],
+      "title": "Wi-Fi Diagnostics"
+    },
+    {
+      "id": "mac-wifi-diagnostics",
+      "path": "macos/wifi_diagnostics.sh",
+      "platform": "macos",
+      "category": "network",
+      "summary": "Live link quality (RSSI/noise, channel, PHY mode, security, rate), radio/driver info, and saved networks.",
+      "use_when": [
+        "wifi slow or dropping",
+        "weak signal",
+        "won't connect to wifi",
+        "which band/channel"
+      ],
+      "admin": "optional (sudo for wdutil detail)",
+      "destructive": false,
+      "runtime_seconds": 15,
+      "args": [],
+      "title": "Wi-Fi Diagnostics"
+    },
+    {
+      "id": "win-pending-reboot",
+      "path": "windows/Get-PendingReboot.ps1",
+      "platform": "windows",
+      "category": "triage",
+      "summary": "Detects pending-reboot flags (CBS, Windows Update, file renames, rename, SCCM) and true uptime; warns when Fast Startup hides reboots.",
+      "use_when": [
+        "updates won't finish",
+        "odd behavior after updates",
+        "has it really been rebooted",
+        "before installing updates"
+      ],
+      "admin": false,
+      "destructive": false,
+      "runtime_seconds": 5,
+      "args": [],
+      "title": "Pending Reboot & Uptime"
+    },
+    {
+      "id": "mac-pending-reboot",
+      "path": "macos/pending_reboot.sh",
+      "platform": "macos",
+      "category": "triage",
+      "summary": "Uptime and reboot history, plus pending macOS updates and staged installers that need a restart.",
+      "use_when": [
+        "has it been restarted recently",
+        "update won't finish",
+        "try a reboot first",
+        "check pending updates"
+      ],
+      "admin": false,
+      "destructive": false,
+      "runtime_seconds": 30,
+      "args": [],
+      "title": "Pending Reboot & Uptime"
+    },
+    {
+      "id": "win-crash-report",
+      "path": "windows/Get-CrashReport.ps1",
+      "platform": "windows",
+      "category": "logs",
+      "summary": "Blue-screen bugcheck codes, unexpected shutdowns (Kernel-Power 41 / 6008), top app crashes, and minidump files on disk.",
+      "use_when": [
+        "random reboots",
+        "blue screen / BSOD",
+        "app keeps crashing",
+        "unexpected shutdowns"
+      ],
+      "admin": "optional (full event access)",
+      "destructive": false,
+      "runtime_seconds": 20,
+      "args": [
+        {
+          "name": "-Days",
+          "required": false,
+          "default": "14",
+          "desc": "look-back window"
+        }
+      ],
+      "title": "Crash & BSOD Report"
+    },
+    {
+      "id": "mac-crash-report",
+      "path": "macos/crash_report.sh",
+      "platform": "macos",
+      "category": "logs",
+      "summary": "Kernel panics, real app crashes (memory-pressure kills shown separately), top crashing apps, and previous shutdown causes.",
+      "use_when": [
+        "mac keeps restarting",
+        "kernel panic",
+        "app keeps quitting",
+        "unexpected shutdowns"
+      ],
+      "admin": false,
+      "destructive": false,
+      "runtime_seconds": 25,
+      "args": [
+        {
+          "name": "days",
+          "required": false,
+          "default": "14",
+          "desc": "look-back window in days"
+        }
+      ],
+      "title": "Crash & Panic Report"
+    },
+    {
+      "id": "win-backup-userdata",
+      "path": "windows/Backup-UserData.ps1",
+      "platform": "windows",
+      "category": "storage",
+      "summary": "Preview the size of a user's Desktop/Documents/Downloads/etc; with -Force -Destination copies them via robocopy. Source untouched.",
+      "use_when": [
+        "before a reimage or rebuild",
+        "save user files first",
+        "migrate to a new machine",
+        "how big is the user's data"
+      ],
+      "admin": "optional (other profiles need it)",
+      "destructive": false,
+      "runtime_seconds": 30,
+      "args": [
+        {
+          "name": "-User",
+          "required": false,
+          "desc": "profile to back up (default current)"
+        },
+        {
+          "name": "-Destination",
+          "required": false,
+          "desc": "target root (required to copy)"
+        },
+        {
+          "name": "-Force",
+          "required": false,
+          "desc": "actually copy; preview default"
+        },
+        {
+          "name": "-IncludeProfile",
+          "required": false,
+          "desc": "copy the entire profile"
+        }
+      ],
+      "title": "Backup User Data"
+    },
+    {
+      "id": "mac-backup-userdata",
+      "path": "macos/backup_user_data.sh",
+      "platform": "macos",
+      "category": "storage",
+      "summary": "Preview the size of a user's key folders; with --force --dest copies them via rsync. Source untouched.",
+      "use_when": [
+        "before wiping a Mac",
+        "save user files first",
+        "migrate to a new machine",
+        "how big is the user's data"
+      ],
+      "admin": "optional (other users need sudo)",
+      "destructive": false,
+      "runtime_seconds": 30,
+      "args": [
+        {
+          "name": "--user",
+          "required": false,
+          "desc": "profile to back up (default current)"
+        },
+        {
+          "name": "--dest",
+          "required": false,
+          "desc": "target root (required to copy)"
+        },
+        {
+          "name": "--force",
+          "required": false,
+          "desc": "actually copy; preview default"
+        },
+        {
+          "name": "--all",
+          "required": false,
+          "desc": "entire home folder"
+        }
+      ],
+      "title": "Backup User Data"
+    },
+    {
+      "id": "win-defender-scan",
+      "path": "windows/Invoke-DefenderScan.ps1",
+      "platform": "windows",
+      "category": "security",
+      "summary": "Defender status, signature age, threat history, and on-demand scan. -Force scans (quick or -Full), -Update refreshes signatures.",
+      "use_when": [
+        "suspected malware",
+        "run a virus scan",
+        "check AV is healthy",
+        "review past detections"
+      ],
+      "admin": "optional",
+      "destructive": false,
+      "runtime_seconds": 10,
+      "args": [
+        {
+          "name": "-Force",
+          "required": false,
+          "desc": "run a scan; report-only default"
+        },
+        {
+          "name": "-Full",
+          "required": false,
+          "desc": "full scan instead of quick"
+        },
+        {
+          "name": "-Update",
+          "required": false,
+          "desc": "update signatures first"
+        }
+      ],
+      "title": "Antivirus Scan"
+    },
+    {
+      "id": "mac-defender-scan",
+      "path": "macos/defender_scan.sh",
+      "platform": "macos",
+      "category": "security",
+      "summary": "Defender (mdatp) status, threats and on-demand scan if installed; otherwise built-in XProtect/Gatekeeper status and recent quarantined downloads.",
+      "use_when": [
+        "suspected malware",
+        "run a virus scan",
+        "check protection status",
+        "review past detections"
+      ],
+      "admin": false,
+      "destructive": false,
+      "runtime_seconds": 10,
+      "args": [
+        {
+          "name": "--force",
+          "required": false,
+          "desc": "run a scan; report-only default"
+        },
+        {
+          "name": "--full",
+          "required": false,
+          "desc": "full scan instead of quick"
+        },
+        {
+          "name": "--update",
+          "required": false,
+          "desc": "update definitions first"
+        }
+      ],
+      "title": "Antivirus Scan"
+    },
+    {
+      "id": "win-persistence-audit",
+      "path": "windows/Get-PersistenceAudit.ps1",
+      "platform": "windows",
+      "category": "security",
+      "summary": "Run keys, startup folders, non-Microsoft scheduled tasks, auto services in odd paths, and WMI subscriptions; suspicious entries flagged.",
+      "use_when": [
+        "malware/PUP cleanup",
+        "something keeps coming back",
+        "unwanted startup programs",
+        "investigate persistence"
+      ],
+      "admin": "optional (some entries need it)",
+      "destructive": false,
+      "runtime_seconds": 15,
+      "args": [],
+      "title": "Startup & Persistence Audit"
+    },
+    {
+      "id": "mac-persistence-audit",
+      "path": "macos/persistence_audit.sh",
+      "platform": "macos",
+      "category": "security",
+      "summary": "Third-party launch agents/daemons, login items, cron, and configuration profiles; suspicious paths flagged.",
+      "use_when": [
+        "malware/PUP cleanup",
+        "something keeps coming back",
+        "unwanted startup items",
+        "investigate persistence"
+      ],
+      "admin": "optional (sudo for profiles)",
+      "destructive": false,
+      "runtime_seconds": 10,
+      "args": [],
+      "title": "Startup & Persistence Audit"
     }
   ]
 }
