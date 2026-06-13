@@ -594,31 +594,60 @@ function probe(cmd, args, ms) {
 }
 // Pertinent client-computer details for a ticket. Fast os-module facts always; model/serial
 // are best-effort and silently omitted if the probe fails or times out.
+function gb(bytes, dp) { const v = bytes / 1073741824; return dp === 0 ? String(Math.round(v)) : v.toFixed(dp === undefined ? 1 : dp); }
+
 function getMachineInfo() {
-  const lines = [];
-  lines.push(`- Hostname: ${os.hostname()}`);
-  lines.push(`- OS: ${PLATFORM === "windows" ? "Windows" : "macOS"} (${process.platform} ${os.release()})`);
-  const cpu = (os.cpus()[0] || {}).model;
-  if (cpu) lines.push(`- CPU: ${cpu.trim()} (${os.cpus().length} logical cores)`);
-  lines.push(`- Memory: ${Math.round(os.totalmem() / 1073741824)} GB`);
-  lines.push(`- Uptime: ${fmtUptime(os.uptime())}`);
-  try { lines.push(`- Signed-in user: ${os.userInfo().username}`); } catch (_) {}
+  let osLine = `${PLATFORM === "windows" ? "Windows" : "macOS"} (${process.platform} ${os.release()})`; // fallback
+  let model = "", serial = "", memUsed = null, disk = null, apps = null;
   try {
     if (PLATFORM === "windows") {
-      const out = probe("powershell", ["-NoProfile", "-Command", "$c=Get-CimInstance Win32_ComputerSystem; $b=Get-CimInstance Win32_BIOS; 'Model='+$c.Manufacturer+' '+$c.Model; 'Serial='+$b.SerialNumber"], 4000);
-      const mm = (out.match(/Model=(.+)/) || [])[1];
-      const ss = (out.match(/Serial=(.+)/) || [])[1];
-      if (mm && mm.trim()) lines.push(`- Model: ${mm.trim()}`);
-      if (ss && ss.trim() && !/to be filled|default string/i.test(ss)) lines.push(`- Serial: ${ss.trim()}`);
+      const ps = "$o=Get-CimInstance Win32_OperatingSystem;$c=Get-CimInstance Win32_ComputerSystem;$b=Get-CimInstance Win32_BIOS;$d=Get-CimInstance Win32_LogicalDisk -Filter \"DeviceID='C:'\";$a=@(Get-ItemProperty 'HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*','HKLM:\\Software\\Wow6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*' -ErrorAction SilentlyContinue|Where-Object {$_.DisplayName}).Count;'OS='+$o.Caption+' '+$o.Version;'Model='+$c.Manufacturer+' '+$c.Model;'Serial='+$b.SerialNumber;'MemTotalKB='+$o.TotalVisibleMemorySize;'MemFreeKB='+$o.FreePhysicalMemory;'DiskTotal='+$d.Size;'DiskFree='+$d.FreeSpace;'Apps='+$a";
+      const out = probe("powershell", ["-NoProfile", "-Command", ps], 7000);
+      const g = (re) => { const m = out.match(re); return m ? m[1].trim() : ""; };
+      if (g(/OS=(.+)/)) osLine = g(/OS=(.+)/);
+      model = g(/Model=(.+)/); serial = g(/Serial=(.+)/);
+      const mt = parseInt(g(/MemTotalKB=(\d+)/), 10), mf = parseInt(g(/MemFreeKB=(\d+)/), 10);
+      if (mt && mf) memUsed = (mt - mf) * 1024;
+      const dt = parseInt(g(/DiskTotal=(\d+)/), 10), dfr = parseInt(g(/DiskFree=(\d+)/), 10);
+      if (dt) disk = { total: dt, used: dt - dfr, free: dfr };
+      const ac = parseInt(g(/Apps=(\d+)/), 10); if (!isNaN(ac)) apps = ac;
     } else {
+      const ver = probe("sw_vers", ["-productVersion"], 2000);
+      const build = probe("sw_vers", ["-buildVersion"], 2000);
+      if (ver) osLine = `macOS ${ver}${build ? ` (build ${build})` : ""}`;
       const sp = probe("system_profiler", ["SPHardwareDataType"], 4000);
-      const model = (sp.match(/Model Name:\s*(.+)/) || [])[1] || (sp.match(/Model Identifier:\s*(.+)/) || [])[1];
-      const ser = (sp.match(/Serial Number \(system\):\s*(.+)/) || [])[1];
-      if (model) lines.push(`- Model: ${model.trim()}`);
-      if (ser) lines.push(`- Serial: ${ser.trim()}`);
+      model = (sp.match(/Model Name:\s*(.+)/) || [])[1] || (sp.match(/Model Identifier:\s*(.+)/) || [])[1] || "";
+      serial = (sp.match(/Serial Number \(system\):\s*(.+)/) || [])[1] || "";
+      const vm = probe("vm_stat", [], 2000);
+      if (vm) {
+        const pg = parseInt(probe("sysctl", ["-n", "hw.pagesize"], 1000) || "4096", 10);
+        const pv = (re) => { const m = vm.match(re); return m ? parseInt(m[1], 10) : 0; };
+        const used = (pv(/Pages active:\s+(\d+)/) + pv(/Pages wired down:\s+(\d+)/) + pv(/Pages occupied by compressor:\s+(\d+)/)) * pg;
+        if (used) memUsed = used;
+      }
+      const df = probe("df", ["-k", "/"], 2000);
+      const row = (df.split("\n")[1] || "").trim().split(/\s+/);
+      if (row.length >= 4 && parseInt(row[1], 10)) {
+        const tKB = parseInt(row[1], 10), aKB = parseInt(row[3], 10);
+        disk = { total: tKB * 1024, used: (tKB - aKB) * 1024, free: aKB * 1024 };
+      }
+      try { apps = fs.readdirSync("/Applications").filter((f) => f.endsWith(".app")).length; } catch (_) {}
     }
   } catch (_) {}
-  return lines.join("\n");
+
+  const L = [];
+  L.push(`- Hostname: ${os.hostname()}`);
+  if (model && model.trim()) L.push(`- Model: ${model.trim()}`);
+  if (serial && serial.trim() && !/to be filled|default string/i.test(serial)) L.push(`- Serial: ${serial.trim()}`);
+  L.push(`- OS: ${osLine}`);
+  const cpu = (os.cpus()[0] || {}).model;
+  if (cpu) L.push(`- CPU: ${cpu.trim()} (${os.cpus().length} logical cores)`);
+  L.push(`- Memory: ${gb(os.totalmem(), 0)} GB total${memUsed ? ` (${gb(memUsed)} GB in use)` : ""}`);
+  if (disk && disk.total) L.push(`- Storage: ${gb(disk.total, 0)} GB total, ${gb(disk.used)} GB used (${gb(disk.free)} GB free)`);
+  if (apps !== null && !isNaN(apps)) L.push(`- Applications installed: ${apps}`);
+  L.push(`- Uptime: ${fmtUptime(os.uptime())}`);
+  try { L.push(`- Signed-in user: ${os.userInfo().username}`); } catch (_) {}
+  return L.join("\n");
 }
 
 // Native OS folder picker (no browser can return a real absolute path). Runs the dialog on
