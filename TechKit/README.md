@@ -1,7 +1,8 @@
 # TechKit — Technician Script Library
 
-A cross-platform diagnostic and repair script library for IT technicians. Works standalone
-(run scripts by hand) or as the tool library for the Qwen Coder Tech Agent on this drive.
+A cross-platform diagnostic and repair script library for IT technicians — **67 scripts
+(~42 tools)** across Windows and macOS. Works standalone (run scripts by hand) or as the tool
+library for the **Tech Tool UI** (and the Qwen Coder Tech Agent) on this drive.
 
 ## Layout
 
@@ -57,7 +58,15 @@ bash "/Volumes/Tech Tool/TechKit/macos/system_report.sh"
 | Security check | Get-SecurityStatus.ps1 | security_status.sh |
 | Account cleanup | Get-UserAccountReport.ps1 → Remove-InactiveUsers.ps1 | user_account_report.sh → remove_inactive_users.sh |
 | Battery complaints | Get-BatteryReport.ps1 | battery_health.sh |
-| Printing | Get-PrinterDiagnostics.ps1 | — |
+| Printing / stuck print job | Get-PrinterDiagnostics.ps1 → Repair-PrintSpooler.ps1 | reset_printing.sh |
+| Blue screen / kernel panic | Get-CrashReport.ps1 | crash_report.sh |
+| Encryption / recovery key | Get-EncryptionStatus.ps1 | encryption_status.sh |
+| Can't log in to domain / GPO not applying | Get-DomainHealth.ps1 | domain_health.sh |
+| Wi-Fi problems | Get-WifiDiagnostics.ps1 | wifi_diagnostics.sh |
+| Hasn't really rebooted / pending reboot | Get-PendingReboot.ps1 | pending_reboot.sh |
+| Suspected malware | Invoke-DefenderScan.ps1 | defender_scan.sh |
+| Unwanted startup / persistence | Get-PersistenceAudit.ps1 | persistence_audit.sh |
+| Back up data before reimage | Backup-UserData.ps1 | backup_user_data.sh |
 | Take logs with you | Export-EventLogs.ps1 | collect_logs.sh |
 
 ## For the AI agent (phase 2)
