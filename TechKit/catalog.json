@@ -354,7 +354,8 @@
           "desc": "actually apply; otherwise dry run"
         }
       ],
-      "title": "Remove Inactive Users"
+      "title": "Remove Inactive Users",
+      "live_window": true
     },
     {
       "id": "win-find-large-files",

@@ -791,12 +791,20 @@ async function openTdxTicket() {
 function applyGuided(s, dryArgs) {
   const forceFlag = s.platform === "windows" ? "-Force" : "--force";
   const applyArgs = dryArgs.concat([forceFlag]);
-  showModal("Apply changes?", `<div class="reason bad">${icon("alert", 17)}<span>This will now actually change the system.</span></div><div style="margin-bottom:6px">Command:</div><code>${escapeHtml(s.path.split("/").pop())} ${escapeHtml(applyArgs.join(" "))}</code><div style="margin-top:10px;color:var(--text-2);font-size:13px">Administrator accounts are never removed, even if matched.</div>`, [
+  const live = s.live_window === true;
+  const note = live
+    ? `<div style="margin-top:10px;color:var(--text-2);font-size:13px">This opens its own PowerShell window so you can watch the live progress — each account, what's freed, and how many remain. The window stays open when done; a log is also saved to the drive's TechKit\\collections folder.</div>`
+    : `<div style="margin-top:10px;color:var(--text-2);font-size:13px">Administrator accounts are never removed, even if matched.</div>`;
+  showModal("Apply changes?", `<div class="reason bad">${icon("alert", 17)}<span>This will now actually change the system.</span></div><div style="margin-bottom:6px">Command:</div><code>${escapeHtml(s.path.split("/").pop())} ${escapeHtml(applyArgs.join(" "))}</code>${note}`, [
     { label: blab("x", "Cancel"), cls: "btn", action: () => runGuided(s) },
     { label: blab("check", "Yes, apply"), cls: "btn approve", action: async () => {
       showModal("Applying…", `<div class="spinner" style="width:26px;height:26px;border-width:3px"></div>`, []);
-      const res = await api("/api/run", { id: s.id, args: applyArgs });
-      showResult("Done", res.output || "(no output)", [{ label: blab("x", "Close"), cls: "btn", action: closeModal }]);
+      const res = await api(live ? "/api/runwindow" : "/api/run", { id: s.id, args: applyArgs });
+      if (res.windowed) {
+        showModal("Running in a PowerShell window", `<div style="display:flex;gap:10px;align-items:flex-start;font-size:14px;line-height:1.6">${icon("check", 18)}<div>A PowerShell window has opened and is running the cleanup. Watch the live progress there — it lists each account, what's freed, and how many remain, and stays open when finished.<br><br>A full log is also saved to <b>TechKit\\collections</b> on the drive.</div></div>`, [{ label: blab("x", "Close"), cls: "btn", action: closeModal }]);
+      } else {
+        showResult("Done", res.output || "(no output)", [{ label: blab("x", "Close"), cls: "btn", action: closeModal }]);
+      }
     } },
   ]);
 }

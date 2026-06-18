@@ -829,6 +829,32 @@ const server = http.createServer(async (req, res) => {
       logActivity({ kind: "tool", via: "guided", tool: entry.title || entry.path.split("/").pop(), args: args || [], code: result.code, digest: digestOutput(result.output) });
       return send(res, 200, result);
     }
+    // Run a script in its OWN visible PowerShell window so the tech watches live progress
+    // (used for long destructive applies like the profile cleanup). Windows only; elsewhere
+    // it falls back to a normal captured run so dev/testing still works.
+    if (req.method === "POST" && url.pathname === "/api/runwindow") {
+      const { id, args } = await readBody(req);
+      const entry = scriptById(id);
+      if (!entry) return send(res, 404, { error: "unknown script id" });
+      const file = scriptAbsPath(entry);
+      const xargs = args || [];
+      log(`windowed run: ${id} ${xargs.join(" ")}`);
+      logActivity({ kind: "tool", via: "guided-window", tool: entry.title || entry.path.split("/").pop(), args: xargs, code: 0, digest: "(running live in its own PowerShell window)" });
+      if (IS_WIN) {
+        // -NoExit keeps the window open when finished so the final totals stay readable.
+        // The new process inherits this server's elevation, so -Force has admin rights.
+        const psArgs = ["-NoExit", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", file, ...xargs];
+        try {
+          const child = spawn("cmd", ["/c", "start", "Tech Tool cleanup", "powershell", ...psArgs], { detached: true, stdio: "ignore" });
+          child.unref();
+          return send(res, 200, { windowed: true });
+        } catch (e) {
+          return send(res, 500, { error: "could not open PowerShell window: " + e.message });
+        }
+      }
+      const result = await runScript(entry, xargs);
+      return send(res, 200, { windowed: false, code: result.code, output: result.output });
+    }
     if (req.method === "POST" && url.pathname === "/api/analyze") {
       if (!status.ready) return send(res, 503, { error: "AI engine not ready yet" });
       const { title, output, instruction } = await readBody(req);
