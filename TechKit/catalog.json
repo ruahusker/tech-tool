@@ -306,7 +306,7 @@
       "path": "windows/Remove-InactiveUsers.ps1",
       "platform": "windows",
       "category": "accounts",
-      "summary": "Disable (default) or delete local users inactive N days. Dry-run unless -Force. Admin accounts are NEVER touched (no override). Also protects built-ins and the current user.",
+      "summary": "Disable (default) or delete local users inactive N days. Deleting also removes the C:\\Users profile and reclaims that disk space (reports how much was freed); pass -KeepProfile to delete the account but keep its profile. Dry-run unless -Force. Admin accounts are NEVER touched (no override). Also protects built-ins and the current user.",
       "use_when": [
         "clean up shared/lab machine accounts",
         "remove departed-user local accounts"
@@ -327,9 +327,9 @@
           "desc": "delete instead of disable"
         },
         {
-          "name": "-RemoveProfile",
+          "name": "-KeepProfile",
           "required": false,
-          "desc": "with -Delete, also remove profile folder"
+          "desc": "with -Delete, keep the profile folder instead of reclaiming its space"
         },
         {
           "name": "-IncludeNeverLoggedOn",
