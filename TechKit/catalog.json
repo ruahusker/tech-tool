@@ -306,7 +306,7 @@
       "path": "windows/Remove-InactiveUsers.ps1",
       "platform": "windows",
       "category": "accounts",
-      "summary": "Reclaim disk space by removing STALE USER PROFILES (works on domain-joined machines - enumerates Win32_UserProfile, not just local accounts). Inactive = profile LastUseTime older than N days; reports per-profile size + TOTAL freed. Dry-run unless -Force. NEVER touches loaded/in-use profiles, the current user, Administrators members, or system profiles. Orphaned profiles (deleted account) need -IncludeOrphaned. -Delete also removes the LOCAL account (domain/AD accounts are left intact); -SkipLocalAccounts leaves local accounts alone entirely.",
+      "summary": "Reclaim disk space by removing STALE USER PROFILES (works on domain-joined machines - enumerates Win32_UserProfile, not just local accounts). Inactive = profile LastUseTime older than N days; reports per-profile size + TOTAL freed. Dry-run unless -Force. NEVER touches loaded/in-use profiles, the current user, Administrators members, or system profiles. Orphaned profiles (deleted account) need -IncludeOrphaned. -Delete also removes the LOCAL account (domain/AD accounts are left intact); -SkipLocalAccounts leaves local accounts alone entirely. -All targets every non-protected profile, ignoring last-use (e.g. before reimaging), since LastUseTime is bumped by background/service activity and can make all profiles look recently used.",
       "use_when": [
         "reclaim disk from departed users' profiles (domain or local)",
         "clean up stale profiles on shared/lab machines",
@@ -322,6 +322,11 @@
           "required": false,
           "default": 90,
           "desc": "idle threshold in days (by profile LastUseTime)"
+        },
+        {
+          "name": "-All",
+          "required": false,
+          "desc": "target EVERY profile except protected (current user, admins, in-use, system, -Exclude); ignores last-use - for clearing/reimaging a machine"
         },
         {
           "name": "-IncludeOrphaned",

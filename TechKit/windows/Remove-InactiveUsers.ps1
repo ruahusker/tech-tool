@@ -20,7 +20,13 @@
       - Always review the dry-run list (it shows names) before applying; protect anyone with -Exclude.
 .PARAMETER DaysInactive
     Inactivity threshold in days (default 90), measured by profile LastUseTime. Always treated
-    as a positive number, so it can never produce a future cutoff.
+    as a positive number, so it can never produce a future cutoff. Ignored when -All is set.
+.PARAMETER All
+    Target EVERY profile except the protected ones (the current user, members of the local
+    Administrators group, in-use/loaded profiles, system profiles, and -Exclude names),
+    ignoring LastUseTime entirely. Use to clear a machine - e.g. before reimaging, or when the
+    last-use timestamps are unreliable (Windows bumps them for background/service activity, not
+    just real logons). Still dry-run unless -Force. Includes orphaned profiles automatically.
 .PARAMETER Delete
     For LOCAL accounts only: also delete the account object after removing its profile. Domain
     accounts cannot be deleted from a member machine, so for them only the local profile is removed.
@@ -45,6 +51,7 @@
 [CmdletBinding()]
 param(
     [int]$DaysInactive = 90,
+    [switch]$All,
     [switch]$Delete,
     [switch]$SkipLocalAccounts,
     [switch]$IncludeOrphaned,
@@ -129,7 +136,11 @@ try {
 $mode = if ($Force) { "EXECUTE" } else { "DRY RUN (no changes; add -Force to apply)" }
 Write-Output "Mode: $mode"
 Write-Output ("Now:    {0}" -f $now.ToString('yyyy-MM-dd HH:mm'))
-Write-Output ("Cutoff: profiles not used since {0}  (idle more than {1} days)  |  Host: {2}`n" -f $cutoff.ToString('yyyy-MM-dd'), $days, $env:COMPUTERNAME)
+if ($All) {
+    Write-Output ("Scope:  ALL profiles except protected (current user, Administrators, in-use, system, -Exclude) - last-use IGNORED  |  Host: {0}`n" -f $env:COMPUTERNAME)
+} else {
+    Write-Output ("Cutoff: profiles not used since {0}  (idle more than {1} days)  |  Host: {2}`n" -f $cutoff.ToString('yyyy-MM-dd'), $days, $env:COMPUTERNAME)
+}
 
 # --- Enumerate profiles (this is what sees domain users; Get-LocalUser would not) ---
 $profiles = @()
@@ -158,9 +169,9 @@ foreach ($p in $profiles) {
     elseif (($adminSids -contains $sid) -or ($shortName -and $adminNames -contains $shortName)) { $why = "Administrators member (admin profiles are never touched)" }
     elseif ($shortName -and ($excludeNames -contains $shortName))         { $why = "excluded by -Exclude" }
     elseif ($isLocal -and $SkipLocalAccounts)                             { $why = "local account (-SkipLocalAccounts set)" }
-    elseif (-not $name -and -not $IncludeOrphaned)                        { $why = "orphaned (account deleted) - use -IncludeOrphaned to reclaim" }
-    elseif ($lastUse -and $lastUse -gt $cutoff)                           { $why = "active (last used $($lastUse.ToString('yyyy-MM-dd')))" }
-    elseif (-not $lastUse -and -not $IncludeOrphaned)                     { $why = "no last-use timestamp - use -IncludeOrphaned to include" }
+    elseif (-not $All -and -not $name -and -not $IncludeOrphaned)         { $why = "orphaned (account deleted) - use -IncludeOrphaned or -All to reclaim" }
+    elseif (-not $All -and $lastUse -and $lastUse -gt $cutoff)            { $why = "active (last used $($lastUse.ToString('yyyy-MM-dd'))) - use -All to override" }
+    elseif (-not $All -and -not $lastUse -and -not $IncludeOrphaned)      { $why = "no last-use timestamp - use -IncludeOrphaned or -All to include" }
 
     if ($why) {
         Write-Output ("  SKIP  {0,-30} {1}" -f $display, $why)
@@ -189,6 +200,8 @@ function Log($msg) {
 }
 
 $totalFreed = [int64]0; $totalPotential = [int64]0
+$total = $candidates.Count
+$done  = 0
 foreach ($c in $candidates) {
     $lastStr = if ($c.LastUse) { $c.LastUse.ToString('yyyy-MM-dd') } else { "unknown" }
     $tag = if ($c.Orphaned) { "[orphaned]" } elseif ($c.IsLocal) { "[local]" } else { "[domain]" }
@@ -202,6 +215,8 @@ foreach ($c in $candidates) {
     }
 
     # ---- EXECUTE: remove the profile (folder + registry) ----
+    $done++
+    Write-Output ("`n[{0}/{1}] {2} {3}  ({4})  removing profile..." -f $done, $total, $c.Display, $tag, (Format-Size $c.Size))
     $prof = Get-CimInstance Win32_UserProfile -ErrorAction SilentlyContinue | Where-Object { $_.SID -eq $c.Sid } | Select-Object -First 1
     $removed = $false
     if ($prof) {
@@ -228,6 +243,7 @@ foreach ($c in $candidates) {
             }
         }
     }
+    Write-Output ("    {0} of {1} processed, {2} left, {3} reclaimed so far." -f $done, $total, ($total - $done), (Format-Size $totalFreed))
 }
 
 if ($Force) {
