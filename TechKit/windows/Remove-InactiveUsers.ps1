@@ -1,57 +1,63 @@
 <#
 .SYNOPSIS
-    Disable (or delete) local user accounts inactive for N days. DRY-RUN BY DEFAULT.
+    Reclaim disk space by removing stale user PROFILES (local AND domain). DRY-RUN BY DEFAULT.
 .DESCRIPTION
-    DESTRUCTIVE - requires admin. Without -Force it only reports what it WOULD do.
+    DESTRUCTIVE - requires admin to apply. Without -Force it only reports what it WOULD remove.
+
+    Works on domain-joined machines: it enumerates Win32_UserProfile (which includes domain
+    users on the box), not just local accounts, and decides "inactive" by each profile's
+    LastUseTime. Removing a profile deletes that user's C:\Users folder + registry entry to
+    reclaim space; the underlying account is left intact (a domain/AD account cannot and should
+    not be managed from a member PC) unless -Delete is given for a LOCAL account.
+
     Safety rails:
-      - Default action is DISABLE, not delete. Deleting requires -Delete explicitly.
-      - Members of the local Administrators group are NEVER touched. No override exists.
-      - Built-in accounts and the current user are never touched.
-      - Accounts that have never logged on are skipped unless -IncludeNeverLoggedOn.
-      - Local accounts only; domain accounts are not in scope of Get-LocalUser.
-      - Every action is appended to a log file next to the script's collections folder.
+      - DRY RUN unless -Force.
+      - Loaded (currently logged-on / in-use) profiles are never removed.
+      - The current user and members of the local Administrators group are never touched.
+      - Special / system profiles (Default, Public, service accounts) are never touched.
+      - Orphaned profiles (SID no longer resolves to an account) are skipped unless -IncludeOrphaned.
+      - Every action is appended to a log file in the TechKit collections folder.
+      - Always review the dry-run list (it shows names) before applying; protect anyone with -Exclude.
 .PARAMETER DaysInactive
-    Inactivity threshold in days (default 90).
+    Inactivity threshold in days (default 90), measured by profile LastUseTime. Always treated
+    as a positive number, so it can never produce a future cutoff.
 .PARAMETER Delete
-    Delete accounts instead of disabling them. This ALSO removes each deleted
-    user's C:\Users profile folder (where the disk space actually is) and the
-    registry hive, then reports how much was freed. Use -KeepProfile to delete
-    the account but leave its profile on disk.
-.PARAMETER KeepProfile
-    With -Delete: keep the user's C:\Users profile folder instead of reclaiming
-    it. The account is removed but no disk space is freed.
-.PARAMETER RemoveProfile
-    Deprecated / no-op: profile removal is the default with -Delete now. Kept so
-    older command lines keep working.
-.PARAMETER IncludeNeverLoggedOn
-    Also act on accounts with no recorded logon (off by default - these are often service accounts).
+    For LOCAL accounts only: also delete the account object after removing its profile. Domain
+    accounts cannot be deleted from a member machine, so for them only the local profile is removed.
+    (Account deletion is OPT-IN: without -Delete, local accounts are kept - only the profile goes.)
+.PARAMETER SkipLocalAccounts
+    Leave LOCAL accounts entirely alone - skip their profiles too, so only domain (and, with
+    -IncludeOrphaned, orphaned) profiles are reclaimed. Use on machines with intentional local
+    accounts (kiosk, lab/tech) you never want touched.
+.PARAMETER IncludeOrphaned
+    Also remove profiles whose SID no longer resolves to an account (deleted local/AD user).
+    These are often the biggest space wins, but the last user cannot be verified.
 .PARAMETER Exclude
-    Additional account names to protect, e.g. -Exclude svc_backup,kiosk
+    Account names to protect, e.g. -Exclude svc_backup,kiosk (matches the name part, ignoring domain).
 .PARAMETER Force
-    Actually perform the actions. Without this, dry-run only.
+    Actually perform the removals. Without this, dry-run only.
 .EXAMPLE
-    .\Remove-InactiveUsers.ps1 -DaysInactive 90                  # dry run: show candidates + reclaimable space
-    .\Remove-InactiveUsers.ps1 -DaysInactive 90 -Force           # disable them (reversible, frees no space)
-    .\Remove-InactiveUsers.ps1 -DaysInactive 180 -Delete -Force  # delete + remove profiles, reclaim disk
-    .\Remove-InactiveUsers.ps1 -DaysInactive 180 -Delete -KeepProfile -Force  # delete accounts, keep profiles
+    .\Remove-InactiveUsers.ps1 -DaysInactive 90                       # dry run: stale profiles + reclaimable space
+    .\Remove-InactiveUsers.ps1 -DaysInactive 90 -Force                # remove those profiles, reclaim disk
+    .\Remove-InactiveUsers.ps1 -DaysInactive 180 -IncludeOrphaned -Force
+    .\Remove-InactiveUsers.ps1 -DaysInactive 180 -Delete -Force       # also delete the LOCAL accounts
 #>
 [CmdletBinding()]
 param(
     [int]$DaysInactive = 90,
     [switch]$Delete,
-    [switch]$KeepProfile,
-    [switch]$RemoveProfile,   # deprecated: profile removal is the default with -Delete now
-    [switch]$IncludeNeverLoggedOn,
+    [switch]$SkipLocalAccounts,
+    [switch]$IncludeOrphaned,
     [string[]]$Exclude = @(),
-    [switch]$Force
+    [switch]$Force,
+    # Deprecated / accepted-but-ignored so older command lines keep working:
+    [switch]$KeepProfile,
+    [switch]$RemoveProfile,
+    [switch]$IncludeNeverLoggedOn
 )
 
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if ($Force -and -not $isAdmin) { Write-Output "[!] -Force requires an elevated PowerShell. Aborting."; exit 1 }
-
-# Deleting an account only reclaims disk space if its profile folder is removed.
-# That is the default with -Delete; -KeepProfile opts out.
-$removeProfiles = $Delete -and -not $KeepProfile
 
 # Junction-safe folder size in bytes. Skips reparse points so the legacy AppData
 # junctions inside a profile are not double-counted and cannot cause loops.
@@ -84,134 +90,152 @@ function Format-Size([int64]$bytes) {
     return ("{0} B" -f $bytes)
 }
 
-# Resolve a local user's on-disk profile. Match by SID (robust - works even when
-# the folder is not named after the user, e.g. john.DOMAIN), fall back to path.
-function Get-UserProfile($user) {
-    $sid = $null
-    try { $sid = $user.SID.Value } catch {}
-    $p = $null
-    if ($sid) {
-        $p = Get-CimInstance Win32_UserProfile -ErrorAction SilentlyContinue | Where-Object { $_.SID -eq $sid } | Select-Object -First 1
-    }
-    if (-not $p) {
-        $p = Get-CimInstance Win32_UserProfile -ErrorAction SilentlyContinue | Where-Object { -not $_.Special -and $_.LocalPath -like "*\$($user.Name)" } | Select-Object -First 1
-    }
-    return $p
+# Translate a SID string to DOMAIN\user (or MACHINE\user). $null = orphaned (account gone).
+function Resolve-Sid($sidString) {
+    try { return ([System.Security.Principal.SecurityIdentifier]$sidString).Translate([System.Security.Principal.NTAccount]).Value } catch { return $null }
 }
 
-$builtin = @('Administrator','DefaultAccount','Guest','WDAGUtilityAccount','defaultuser0')
-$cutoff  = (Get-Date).AddDays(-$DaysInactive)
-$action  = if ($Delete) { "DELETE" } else { "DISABLE" }
-$mode    = if ($Force) { "EXECUTE" } else { "DRY RUN (no changes will be made; add -Force to apply)" }
+# --- Threshold. Abs() + floor guarantee a past cutoff even if a negative/zero slips in. ---
+$days = [math]::Abs($DaysInactive)
+if ($days -lt 1) { $days = 90 }
+$now    = Get-Date
+$cutoff = $now.AddDays(-$days)
 
-$adminMembers = @()
-try { $adminMembers = (Get-LocalGroupMember Administrators -ErrorAction Stop).Name | ForEach-Object { ($_ -split '\\')[-1] } } catch {}
+# --- Protection sets ---
+$currentSid = ""
+try { $currentSid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value } catch {}
+$excludeNames = @($Exclude | ForEach-Object { ($_ -split '\\')[-1] })
 
+# Local Administrators members (direct). Note: members nested via a group (e.g. Domain Admins)
+# are not expanded here - the dry-run list is the backstop, so review it before applying.
+$adminSids = @(); $adminNames = @()
+try {
+    $m = Get-LocalGroupMember -Group Administrators -ErrorAction Stop
+    $adminSids  = @($m | ForEach-Object { $_.SID.Value })
+    $adminNames = @($m | ForEach-Object { ($_.Name -split '\\')[-1] })
+} catch {
+    try {
+        $started = $false
+        foreach ($line in (net localgroup Administrators 2>$null)) {
+            if ($line -match '^----') { $started = $true; continue }
+            if (-not $started) { continue }
+            if ($line -match 'completed successfully') { break }
+            $t = "$line".Trim()
+            if ($t) { $adminNames += ($t -split '\\')[-1] }
+        }
+    } catch {}
+}
+
+$mode = if ($Force) { "EXECUTE" } else { "DRY RUN (no changes; add -Force to apply)" }
 Write-Output "Mode: $mode"
-Write-Output "Action for matches: $action  |  Threshold: no logon since $($cutoff.ToString('yyyy-MM-dd'))  |  Host: $env:COMPUTERNAME`n"
+Write-Output ("Now:    {0}" -f $now.ToString('yyyy-MM-dd HH:mm'))
+Write-Output ("Cutoff: profiles not used since {0}  (idle more than {1} days)  |  Host: {2}`n" -f $cutoff.ToString('yyyy-MM-dd'), $days, $env:COMPUTERNAME)
 
-$candidates = @(); $skipped = @()
-foreach ($u in Get-LocalUser) {
-    $why = $null
-    if ($builtin -contains $u.Name)                  { $why = "built-in account" }
-    elseif ($u.Name -ieq $env:USERNAME)              { $why = "current user" }
-    elseif ($Exclude -contains $u.Name)              { $why = "excluded by -Exclude" }
-    elseif ($adminMembers -contains $u.Name) { $why = "Administrators member (admin accounts are never touched)" }
-    elseif (-not $u.LastLogon -and -not $IncludeNeverLoggedOn)        { $why = "never logged on (use -IncludeNeverLoggedOn to override)" }
-    elseif ($u.LastLogon -and $u.LastLogon -gt $cutoff)               { $why = "active (last logon $($u.LastLogon.ToString('yyyy-MM-dd')))" }
-    elseif (-not $u.Enabled -and -not $Delete)                        { $why = "already disabled" }
-
-    if ($why) { $skipped += "  SKIP  {0,-22} {1}" -f $u.Name, $why }
-    else      { $candidates += $u }
-}
+# --- Enumerate profiles (this is what sees domain users; Get-LocalUser would not) ---
+$profiles = @()
+try { $profiles = @(Get-CimInstance Win32_UserProfile -ErrorAction Stop | Where-Object { -not $_.Special }) }
+catch { Write-Output "[!] Could not enumerate user profiles: $($_.Exception.Message)"; exit 1 }
 
 Write-Output "=== PROTECTED / SKIPPED ==="
-$skipped | ForEach-Object { Write-Output $_ }
+$candidates = @()
+foreach ($p in $profiles) {
+    $sid  = [string]$p.SID
+    $path = [string]$p.LocalPath
+    if (-not $path) { continue }
+    $loaded    = [bool]$p.Loaded
+    $name      = Resolve-Sid $sid
+    $shortName = if ($name) { ($name -split '\\')[-1] } else { $null }
+    $display   = if ($name) { $name } else { "(orphaned: $sid)" }
+    $lastUse   = $null
+    if ($p.LastUseTime) { try { $lastUse = [datetime]$p.LastUseTime } catch {} }
+    # A profile is "local" if its SID belongs to a local account (domain SIDs won't match).
+    $isLocal = $false
+    if ($name) { try { if (Get-LocalUser -SID ([System.Security.Principal.SecurityIdentifier]$sid) -ErrorAction Stop) { $isLocal = $true } } catch {} }
 
-Write-Output "`n=== CANDIDATES ($($candidates.Count)) ==="
-if (-not $candidates) { Write-Output "  None. Nothing to do."; exit 0 }
+    $why = $null
+    if ($loaded)                                                          { $why = "loaded - user is logged on / in use" }
+    elseif ($sid -eq $currentSid)                                         { $why = "current user" }
+    elseif (($adminSids -contains $sid) -or ($shortName -and $adminNames -contains $shortName)) { $why = "Administrators member (admin profiles are never touched)" }
+    elseif ($shortName -and ($excludeNames -contains $shortName))         { $why = "excluded by -Exclude" }
+    elseif ($isLocal -and $SkipLocalAccounts)                             { $why = "local account (-SkipLocalAccounts set)" }
+    elseif (-not $name -and -not $IncludeOrphaned)                        { $why = "orphaned (account deleted) - use -IncludeOrphaned to reclaim" }
+    elseif ($lastUse -and $lastUse -gt $cutoff)                           { $why = "active (last used $($lastUse.ToString('yyyy-MM-dd')))" }
+    elseif (-not $lastUse -and -not $IncludeOrphaned)                     { $why = "no last-use timestamp - use -IncludeOrphaned to include" }
 
-$logFile = Join-Path $PSScriptRoot ("..\collections\{0}-user-cleanup-{1}.log" -f $env:COMPUTERNAME, (Get-Date -Format "yyyyMMdd-HHmmss"))
-function Log($msg) {
-    $line = "{0}  {1}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $msg
-    Write-Output "  $msg"
-    if ($Force) { try { Add-Content -Path $logFile -Value $line -ErrorAction SilentlyContinue } catch {} }
+    if ($why) {
+        Write-Output ("  SKIP  {0,-30} {1}" -f $display, $why)
+    } else {
+        $candidates += [pscustomobject]@{ Sid=$sid; Path=$path; Name=$name; Display=$display; LastUse=$lastUse; Orphaned=(-not $name); IsLocal=$isLocal; Size=[int64]0 }
+    }
 }
 
-$totalFreed     = [int64]0   # bytes actually reclaimed (apply)
-$totalPotential = [int64]0   # bytes that would be reclaimed (dry run)
+if (-not $candidates) {
+    Write-Output "`n=== CANDIDATES (0) ===`n  None. No stale profiles match (everything is in use, recent, protected, or orphaned without -IncludeOrphaned)."
+    exit 0
+}
 
-foreach ($u in $candidates) {
-    $last = if ($u.LastLogon) { $u.LastLogon.ToString('yyyy-MM-dd') } else { "never" }
+# Size each candidate (junction-safe), biggest first so the largest wins show at the top.
+foreach ($c in $candidates) {
+    $c.Size = Get-FolderSize $c.Path
+}
+$candidates = @($candidates | Sort-Object Size -Descending)
 
-    # Resolve + size the profile up front so we can report it (only when deleting).
-    $prof = $null; $profPath = $null; $profLoaded = $false; $profSize = [int64]0
-    if ($Delete) {
-        $prof = Get-UserProfile $u
-        if ($prof) {
-            $profPath   = $prof.LocalPath
-            $profLoaded = [bool]$prof.Loaded
-            $profSize   = Get-FolderSize $profPath
-        }
-    }
+Write-Output ("`n=== CANDIDATES ({0}) ===" -f $candidates.Count)
+
+$logFile = Join-Path $PSScriptRoot ("..\collections\{0}-profile-cleanup-{1}.log" -f $env:COMPUTERNAME, (Get-Date -Format "yyyyMMdd-HHmmss"))
+function Log($msg) {
+    Write-Output "  $msg"
+    if ($Force) { try { Add-Content -Path $logFile -Value ("{0}  {1}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $msg) -ErrorAction SilentlyContinue } catch {} }
+}
+
+$totalFreed = [int64]0; $totalPotential = [int64]0
+foreach ($c in $candidates) {
+    $lastStr = if ($c.LastUse) { $c.LastUse.ToString('yyyy-MM-dd') } else { "unknown" }
+    $tag = if ($c.Orphaned) { "[orphaned]" } elseif ($c.IsLocal) { "[local]" } else { "[domain]" }
 
     if (-not $Force) {
         # ---- DRY RUN ----
-        if (-not $Delete) {
-            Write-Output ("  WOULD DISABLE {0,-22} (last logon {1}) - reversible, frees no space" -f $u.Name, $last)
-        } elseif ($removeProfiles -and $prof -and $profLoaded) {
-            Write-Output ("  [!] WOULD DELETE {0,-20} (last logon {1}) - profile is LOADED (in use); {2} cannot be reclaimed until that user is logged off" -f $u.Name, $last, (Format-Size $profSize))
-        } elseif ($removeProfiles -and $prof) {
-            $totalPotential += $profSize
-            Write-Output ("  WOULD DELETE {0,-22} (last logon {1}) - frees {2}  [{3}]" -f $u.Name, $last, (Format-Size $profSize), $profPath)
-        } elseif ($removeProfiles) {
-            Write-Output ("  WOULD DELETE {0,-22} (last logon {1}) - no profile on disk (frees nothing)" -f $u.Name, $last)
-        } else {
-            $keep = if ($profPath) { " - profile KEPT at $profPath ($(Format-Size $profSize))" } else { "" }
-            Write-Output ("  WOULD DELETE {0,-22} (last logon {1}){2}" -f $u.Name, $last, $keep)
-        }
+        $totalPotential += $c.Size
+        $extra = if ($Delete -and $c.IsLocal) { " (+ delete local account)" } else { "" }
+        Write-Output ("  WOULD RECLAIM {0,-30} {1,-10} last used {2}  frees {3}{4}  [{5}]" -f $c.Display, $tag, $lastStr, (Format-Size $c.Size), $extra, $c.Path)
         continue
     }
 
-    # ---- EXECUTE ----
-    try {
-        if ($Delete) {
-            Remove-LocalUser -Name $u.Name -ErrorAction Stop
-            if (-not $removeProfiles) {
-                $kept = if ($profPath) { " (profile KEPT at $profPath, $(Format-Size $profSize))" } else { "" }
-                Log ("DELETED user {0}{1}" -f $u.Name, $kept)
-            } elseif (-not $prof) {
-                Log ("DELETED user {0} (no profile on disk to reclaim)" -f $u.Name)
-            } elseif ($profLoaded) {
-                Log ("[!] DELETED user {0}; profile {1} is LOADED (in use) - NOT removed, {2} not reclaimed" -f $u.Name, $profPath, (Format-Size $profSize))
-            } else {
-                $removed = $false
-                try { $prof | Remove-CimInstance -ErrorAction Stop; $removed = $true }
-                catch {
-                    # CIM/registry removal failed (often a locked handle); delete the folder directly.
-                    try { Remove-Item -LiteralPath $profPath -Recurse -Force -ErrorAction Stop; $removed = $true }
-                    catch { Log ("[!] DELETED user {0}; FAILED to remove profile {1}: {2}" -f $u.Name, $profPath, $_.Exception.Message) }
-                }
-                if ($removed) {
-                    $totalFreed += $profSize
-                    Log ("DELETED user {0} + profile {1} (freed {2})" -f $u.Name, $profPath, (Format-Size $profSize))
-                }
-            }
-        } else {
-            Disable-LocalUser -Name $u.Name -ErrorAction Stop
-            Log ("DISABLED user {0} (last logon {1})" -f $u.Name, $last)
+    # ---- EXECUTE: remove the profile (folder + registry) ----
+    $prof = Get-CimInstance Win32_UserProfile -ErrorAction SilentlyContinue | Where-Object { $_.SID -eq $c.Sid } | Select-Object -First 1
+    $removed = $false
+    if ($prof) {
+        try { $prof | Remove-CimInstance -ErrorAction Stop; $removed = $true }
+        catch {
+            # CIM/registry removal blocked (often a locked handle); delete the folder directly.
+            try { Remove-Item -LiteralPath $c.Path -Recurse -Force -ErrorAction Stop; $removed = $true }
+            catch { Log ("[!] FAILED to remove profile {0} ({1}): {2}" -f $c.Path, $c.Display, $_.Exception.Message) }
         }
-    } catch {
-        Log ("FAILED on {0}: {1}" -f $u.Name, $_.Exception.Message)
+    } else {
+        try { Remove-Item -LiteralPath $c.Path -Recurse -Force -ErrorAction Stop; $removed = $true }
+        catch { Log ("[!] FAILED to remove folder {0}: {1}" -f $c.Path, $_.Exception.Message) }
+    }
+
+    if ($removed) {
+        $totalFreed += $c.Size
+        Log ("RECLAIMED profile {0} for {1} {2} (freed {3})" -f $c.Path, $c.Display, $tag, (Format-Size $c.Size))
+        if ($Delete) {
+            if ($c.IsLocal) {
+                try { Remove-LocalUser -SID ([System.Security.Principal.SecurityIdentifier]$c.Sid) -ErrorAction Stop; Log ("DELETED local account {0}" -f $c.Display) }
+                catch { Log ("[!] profile removed but FAILED to delete local account {0}: {1}" -f $c.Display, $_.Exception.Message) }
+            } elseif (-not $c.Orphaned) {
+                Log ("note: {0} is a domain account - profile removed, AD account left intact" -f $c.Display)
+            }
+        }
     }
 }
 
 if ($Force) {
-    if ($removeProfiles) { Write-Output ("`nTOTAL DISK RECLAIMED: {0}" -f (Format-Size $totalFreed)) }
+    Write-Output ("`nTOTAL DISK RECLAIMED: {0}" -f (Format-Size $totalFreed))
     Write-Output "Action log: $logFile"
 } else {
-    if ($removeProfiles) { Write-Output ("`nTOTAL RECLAIMABLE: {0} (re-run with -Force to apply)" -f (Format-Size $totalPotential)) }
-    Write-Output "`nDry run complete. Re-run with -Force to apply the $action actions above."
+    Write-Output ("`nTOTAL RECLAIMABLE: {0} (re-run with -Force to apply)" -f (Format-Size $totalPotential))
+    Write-Output "Dry run complete. Re-run with -Force to remove the profiles above."
 }
-Write-Output "Tip: DISABLE is reversible (Enable-LocalUser) but frees no space. DELETE reclaims disk by removing the profile (default); add -KeepProfile to keep it."
-if ($Delete) { Write-Output "Note: if Windows still shows the space as used afterward, System Protection / shadow copies (VSS) may be holding the freed data - Windows purges that only when space is needed. Check with: vssadmin list shadowstorage" }
+Write-Output "Note: removing a profile deletes that user's C:\Users folder. Domain/AD accounts are left intact (only the local profile is cleared); add -Delete to also remove LOCAL accounts."
+Write-Output "Note: if Windows still shows the space as used afterward, System Protection / shadow copies (VSS) may be holding the freed data - Windows purges that only when space is needed. Check with: vssadmin list shadowstorage"
