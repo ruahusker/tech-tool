@@ -4,6 +4,31 @@ REM Extracts the bundled Node runtime (one-time) and starts the local UI server,
 REM which opens your browser to the Tech Tool interface.
 setlocal
 
+REM ---- Model selection survives a UAC relaunch via the first argument. ----
+REM The Granite wrapper sets TECHTOOL_MODEL in the environment before CALLing
+REM this script; the elevated relaunch below passes it back in as %1 (a RunAs
+REM relaunch starts with a fresh environment that would otherwise drop it).
+if "%~2"=="elevated" set "TT_ELEVATED=1"
+if not "%~1"=="" if /I not "%~1"=="default" set "TECHTOOL_MODEL=%~1"
+set "TT_MODEL_ARG=%TECHTOOL_MODEL%"
+if not defined TT_MODEL_ARG set "TT_MODEL_ARG=default"
+
+REM ---- Self-elevate so admin repair tools (user cleanup, WU/SCCM/spooler
+REM repair, Office/Adobe removal, etc.) can actually run. One UAC prompt at
+REM launch. If the tech declines UAC, we keep running without admin so
+REM read-only triage still works - admin-only tools will just report they
+REM need elevation instead of failing silently.
+if defined TT_ELEVATED goto :afterElevation
+net session >nul 2>&1
+if not errorlevel 1 goto :afterElevation
+echo Requesting administrator privileges so all repair tools can run...
+powershell -NoProfile -Command "try { Start-Process -FilePath '%~f0' -ArgumentList '%TT_MODEL_ARG%','elevated' -Verb RunAs } catch { exit 1 }"
+if not errorlevel 1 exit /b
+echo   UAC was declined - continuing without administrator rights.
+echo   Admin-only tools (user cleanup, system repair) will be limited.
+echo.
+:afterElevation
+
 set "DRIVE_ROOT=%~dp0"
 set "UI_DIR=%DRIVE_ROOT%TechTool-UI"
 set "RUNTIME_DIR=%UI_DIR%\runtime"
